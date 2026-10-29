@@ -355,7 +355,7 @@ function openInvoiceEdit(id) {
    suman payment.payments: toda corrección reescribe ese desglose junto con payment.method y payment.amount. */
 function invoiceTendersOf(payment) {
   const list = Array.isArray(payment.payments) && payment.payments.length ? payment.payments : [{ method: payment.method || 'Efectivo', amount: payment.amount }];
-  return list.map(t => ({ method: t.method, amount: Number(t.amount) || 0, received: Number(t.received) || Number(t.amount) || 0, change: Number(t.change) || 0 }));
+  return list.map(t => { const venta = tenderSale(t); return { method: t.method, amount: venta, received: Math.max(venta, (Number(t.received) || Number(t.amount) || 0) - tenderTip(t)), change: Number(t.change) || 0 }; }); // sin la propina: se edita solo el consumo
 }
 // Un solo medio: el monto sigue al total (en efectivo se conserva lo recibido si alcanza). Pago mixto: las filas editadas.
 function rebuildInvoiceTenders(original, draftTenders, method, total) {
@@ -418,7 +418,10 @@ function saveInvoiceEdit() {
     const sum = draftTenders.reduce((s, t) => s + t.amount, 0);
     if (sum !== newAmount) return showToast(`El desglose del pago suma ${money.format(sum)} y la factura ${money.format(newAmount)}. Ajusta los montos.`);
   }
-  const tenders = rebuildInvoiceTenders(invoiceTendersOf(payment), draftTenders, document.querySelector('#invoiceMethodEdit').value, newAmount);
+  const tip = paymentTip(payment), shares = tipShares(draftTenders.length > 1 ? draftTenders.map(t => t.amount) : [newAmount], tip);
+  // La propina no se edita aquí: se vuelve a repartir entre los medios del desglose corregido
+  const tenders = rebuildInvoiceTenders(invoiceTendersOf(payment), draftTenders, document.querySelector('#invoiceMethodEdit').value, newAmount)
+    .map((t, i) => { const share = shares[i] || 0; if (!share) return t; const amount = t.amount + share, received = Math.max(Number(t.received) || 0, amount); return { ...t, amount, tip: share, received, change: received - amount }; });
   const before = { customer: payment.customer, method: payment.method, amount: payment.amount, items: structuredClone(payment.items || []), payments: structuredClone(payment.payments || []) };
   if (!payment.splitShare) {
     const oldQty = {}, newQty = {}, sample = {};
@@ -432,7 +435,7 @@ function saveInvoiceEdit() {
   }
   payment.items = items; payment.amount = newAmount;
   payment.customer = document.querySelector('#invoiceCustomer').value.trim() || payment.customer;
-  payment.payments = tenders; payment.method = tendersMethodLabel(tenders);
+  payment.payments = tenders; payment.method = tendersMethodLabel(tenders); if (tip) payment.tip = tip;
   payment.sync_status = 'pending'; // la corrección también se sube a Supabase (monto, productos y desglose)
   payment.editedAt = Date.now(); payment.editedBy = actor().userName; payment.edits = [...(payment.edits || []), { at: payment.editedAt, by: payment.editedBy, reason, before }];
   globalThis.marcarHistorialModificado?.('payments', payment); // su mes se reescribe en IndexedDB aunque sea antiguo

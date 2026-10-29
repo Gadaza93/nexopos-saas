@@ -82,6 +82,8 @@ function buildReceiptHtml(payment, { profile = {}, paperWidth = 80, demo = false
   const pay = payment || {}, items = Array.isArray(pay.items) ? pay.items : [];
   const tenders = Array.isArray(pay.payments) && pay.payments.length ? pay.payments : [{ method: pay.method || 'Efectivo', amount: pay.amount }];
   const paidAt = pay.paidAt || pay.createdAt || now;
+  // Propina voluntaria: aparte del consumo (pay.amount); los medios de pago ya la incluyen
+  const tip = tenders.reduce((s, t) => s + Math.max(0, Number(t.tip) || 0), 0) || Math.max(0, Number(pay.tip) || 0);
   const mark = demo ? `<div class="mark">${RECEIPT_DEMO_MARK}</div>` : '';
   const itemsHtml = items.map(item => {
     const qty = Number(item.qty) || 0, price = Number(item.price) || 0;
@@ -104,7 +106,8 @@ ${pay.waiterName ? `<div class="row"><span>Atendió:</span><span>${receiptEscape
 <hr>
 ${itemsHtml || '<div class="center">Sin productos</div>'}
 <hr>
-<div class="row total"><span>TOTAL</span><span class="num">${receiptMoney.format(Number(pay.amount) || 0)}</span></div>
+${tip ? `<div class="row"><span>Consumo</span><span class="num">${receiptMoney.format(Number(pay.amount) || 0)}</span></div><div class="row"><span>Propina voluntaria</span><span class="num">${receiptMoney.format(tip)}</span></div>` : ''}
+<div class="row total"><span>TOTAL</span><span class="num">${receiptMoney.format((Number(pay.amount) || 0) + tip)}</span></div>
 <hr>
 <div class="bold">Método de pago</div>
 ${tendersHtml}
@@ -132,6 +135,7 @@ ${row('TOTAL VENTAS:', receiptMoney.format(Number(totalSales) || 0), true)}
 ${row('Ventas efectivo:', receiptMoney.format(Number(s.cashSales) || 0))}
 ${row('Otros medios:', receiptMoney.format(Number(s.otherSales) || 0))}
 ${row('Compras/Gastos:', `- ${receiptMoney.format(Number(s.cashExpenses) || 0)}`)}
+${Number(s.tips) ? row('Propinas (aparte):', receiptMoney.format(Number(s.tips))) + (Number(s.tipsCash) !== Number(s.tips) ? row('&nbsp;&nbsp;en efectivo:', receiptMoney.format(Number(s.tipsCash) || 0)) : '') : ''}
 <hr>
 ${row('Base inicial:', receiptMoney.format(Number(s.openingCash) || 0))}
 ${row('Efectivo esperado:', receiptMoney.format(Number(s.expected) || 0))}

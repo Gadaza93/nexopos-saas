@@ -133,7 +133,7 @@ ok('Mesero bloqueado; cajero anula y la anulación se imprime al guardar; quitar
 // 4. Cobro
 console.log('\n4. Cobro...');
 run(`resetScenario(); session = 'u_cajero'; printed.length = 0;
-  openPayment(); document.querySelector('#tenderCashReceived').value = '80000'; confirmPayment();`);
+  openPayment(); document.querySelector('#tenderCashReceived').value = '90000'; confirmPayment();`); // 74.500 + 10 % de propina sugerida en mesa
 assert.strictEqual(get('state.payments.length'), 1, 'la venta se registró');
 assert.deepStrictEqual(get('printed.map(p => p.label.split(" #")[0])').sort(), ['Comanda Barra', 'Comanda Cocina'], 'cobrar primero envía lo que faltaba');
 run(`resetScenario(); session = 'u_cajero'; sendOrderToKitchen(); printed.length = 0;

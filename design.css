@@ -1461,6 +1461,14 @@ html[data-theme="light"] .login-dialog::backdrop { background: radial-gradient(5
 .print-printer-row .outline-button { min-height: 40px; padding: 0 12px; }
 .print-settings-card .check-row { margin-bottom: 12px; }
 
+/* ---------- Propina voluntaria (ventana de cobro) ---------- */
+.tip-row { display: grid; grid-template-columns: 1fr 130px; align-items: center; gap: 6px 12px; margin: 12px 0 4px; padding: 10px 12px; border: 1px solid var(--accent-line); border-radius: var(--r-sm); background: var(--accent-soft); }
+.tip-row[hidden] { display: none; }
+.tip-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--text); cursor: pointer; }
+.tip-toggle input[type="checkbox"] { flex: 0 0 auto; width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: var(--accent); }
+.tip-row input[type="number"] { margin: 0; min-height: 36px; text-align: right; font-weight: 700; }
+.tip-row small { grid-column: 1 / -1; font-size: 12px; }
+
 /* ---------- Insumos y recetas ---------- */
 .card-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .card-title-row h3 { margin: 0 0 4px; }

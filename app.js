@@ -494,10 +494,46 @@ function showToast(message, { action = null } = {}) {
 }
 function isShiftOpen() { return state.cashShift?.status === 'open'; }
 function currentShiftPayments() { return state.payments.filter(payment=>payment.shiftId===state.cashShift?.id); }
+/* ============ Propina voluntaria ============
+   payment.amount es solo el consumo: ventas, utilidad y reportes nunca incluyen la propina. La propina va en payment.tip
+   y cada medio de pago guarda su parte en tender.tip (tender.amount sí la incluye: es lo que entró por ese medio). La caja
+   suma la propina en efectivo al efectivo esperado, pero la muestra aparte. Viaja a la nube dentro de ventas.payments.
+   Se sugiere solo en pedidos de mesa: state.profile.tipPercent (10 % por defecto, 0 = sin propina). */
+const DEFAULT_TIP_PERCENT = 10;
+function tipPercent() { const v = Number(state.profile?.tipPercent); return state.profile?.tipPercent != null && Number.isFinite(v) && v >= 0 && v <= 30 ? v : DEFAULT_TIP_PERCENT; }
+function suggestedTip(order, total) { return isTableOrder(order) && tipPercent() > 0 ? Math.round((Number(total) || 0) * tipPercent() / 100) : 0; }
+function tenderTip(t) { return Math.max(0, Number(t?.tip) || 0); }
+function tenderSale(t) { return (Number(t?.amount) || 0) - tenderTip(t); }
+function paymentTip(p) { const enPagos = (Array.isArray(p?.payments) ? p.payments : []).reduce((s, t) => s + tenderTip(t), 0); return enPagos || Math.max(0, Number(p?.tip) || 0); }
+// Parte de la propina de cada medio, en proporción a lo que cubrió (el redondeo va al último)
+function tipShares(amounts, tip) {
+  const total = amounts.reduce((s, a) => s + (Number(a) || 0), 0); let restante = Math.round(Number(tip) || 0);
+  return amounts.map((a, i) => { if (i === amounts.length - 1) return Math.max(0, restante); const share = total ? Math.round(tip * (Number(a) || 0) / total) : 0; restante -= share; return share; });
+}
+// Propinas de un grupo de facturas: total y lo que entró en efectivo
+function tipsOf(payments) {
+  return (payments || []).reduce((acc, p) => {
+    const tenders = Array.isArray(p.payments) && p.payments.length ? p.payments : [];
+    tenders.forEach(t => { const tip = tenderTip(t); acc.total += tip; if (t.method === 'Efectivo') acc.cash += tip; });
+    if (!tenders.length && Number(p.tip) > 0) { acc.total += Number(p.tip); if (p.method === 'Efectivo') acc.cash += Number(p.tip); }
+    return acc;
+  }, { total: 0, cash: 0 });
+}
+function saveTipPercent(value) {
+  const v = Math.round(Number(value));
+  if (!Number.isFinite(v) || v < 0 || v > 30) { renderTipSettings(); return showToast('La propina sugerida debe estar entre 0 % y 30 %.'); }
+  state.profile = { ...state.profile, tipPercent: v, sync_status: 'pending' };
+  saveState(); if (globalThis.NexoSync?.scheduleSync) globalThis.NexoSync.scheduleSync();
+  showToast(v ? `Propina sugerida: ${v} % en pedidos de mesa.` : 'Propina sugerida desactivada.');
+}
+function renderTipSettings() { const el = document.querySelector('#tipPercentInput'); if (el && document.activeElement !== el) el.value = String(tipPercent()); }
+globalThis.paymentTip = paymentTip;
+globalThis.tenderSale = tenderSale;
+
 function cashSalesToday() {
   return currentShiftPayments().reduce((sum, payment) => {
     if (Array.isArray(payment.payments) && payment.payments.length > 0) {
-      return sum + payment.payments.filter(p => p.method === 'Efectivo').reduce((s, p) => s + p.amount, 0);
+      return sum + payment.payments.filter(p => p.method === 'Efectivo').reduce((s, p) => s + tenderSale(p), 0); // la propina no es venta
     }
     return sum + (payment.method === 'Efectivo' ? payment.amount : 0);
   }, 0);
@@ -505,14 +541,15 @@ function cashSalesToday() {
 function otherSalesToday() {
   return currentShiftPayments().reduce((sum, payment) => {
     if (Array.isArray(payment.payments) && payment.payments.length > 0) {
-      return sum + payment.payments.filter(p => p.method !== 'Efectivo').reduce((s, p) => s + p.amount, 0);
+      return sum + payment.payments.filter(p => p.method !== 'Efectivo').reduce((s, p) => s + tenderSale(p), 0);
     }
     return sum + (payment.method !== 'Efectivo' ? payment.amount : 0);
   }, 0);
 }
 function cashExpensesToday() { return state.expenses.filter(expense=>expense.shiftId===state.cashShift?.id&&expense.method==='Efectivo').reduce((sum,expense)=>sum+expense.amount,0); }
 function cashPurchasesToday() { return state.purchases.filter(purchase=>purchase.shiftId===state.cashShift?.id&&purchase.method==='Efectivo').reduce((sum,purchase)=>sum+purchase.total,0); }
-function expectedCash() { if (!isShiftOpen()) return 0; return Number(state.cashShift?.openingCash || 0)+cashSalesToday()-cashExpensesToday()-cashPurchasesToday(); }
+function tipsToday() { return tipsOf(currentShiftPayments()); }
+function expectedCash() { if (!isShiftOpen()) return 0; return Number(state.cashShift?.openingCash || 0)+cashSalesToday()+tipsToday().cash-cashExpensesToday()-cashPurchasesToday(); } // la propina en efectivo está en la caja, aunque no sea venta
 globalThis.formatQty = formatQty;
 globalThis.formatDate = formatDate;
 globalThis.isShiftOpen = isShiftOpen;
@@ -1165,6 +1202,10 @@ function openPayment(customCheckout = null) {
     };
   }
 
+  // Propina voluntaria sugerida (solo pedidos de mesa); el cajero la puede quitar o cambiar antes de registrar pagos
+  currentCheckout.tipSuggested = suggestedTip(order, currentCheckout.total);
+  currentCheckout.tip = currentCheckout.tipSuggested;
+
   currentTenders = [];
   activePaymentMethod = state.paymentMethod || 'Efectivo';
   if (!PAYMENT_METHODS.includes(activePaymentMethod)) activePaymentMethod = 'Efectivo';
@@ -1192,16 +1233,38 @@ function renderPaymentOptions() {
   `).join('');
 }
 
+// Lo que el cliente paga: consumo + propina
+function checkoutDue() { return currentCheckout ? currentCheckout.total + Math.max(0, Math.round(Number(currentCheckout.tip) || 0)) : 0; }
+function renderTipControls() {
+  const row = document.querySelector('#tipRow'); if (!row || !currentCheckout) return;
+  const tip = Math.max(0, Math.round(Number(currentCheckout.tip) || 0)), locked = currentTenders.length > 0;
+  row.hidden = !currentCheckout.tipSuggested && !tip; // sin propina sugerida (mostrador, para llevar) no se ofrece
+  const on = document.querySelector('#tipEnabled'), amount = document.querySelector('#tipAmount'), label = document.querySelector('#tipLabel');
+  if (on) { on.checked = tip > 0; on.disabled = locked; }
+  if (amount) { if (document.activeElement !== amount) amount.value = tip ? String(tip) : ''; amount.disabled = locked || !tip; }
+  if (label) label.textContent = `Propina voluntaria${tipPercent() ? ` (sugerida ${tipPercent()} %)` : ''}`;
+  const hint = document.querySelector('#tipHint');
+  if (hint) hint.textContent = locked ? 'Quita los pagos agregados para cambiar la propina.' : `Consumo ${money.format(currentCheckout.total)}${tip ? ` + propina ${money.format(tip)}` : ' · sin propina'}`;
+}
+// Quitar, volver a poner o cambiar la propina (solo antes de registrar pagos)
+function setCheckoutTip(value) {
+  if (!currentCheckout || currentTenders.length) return;
+  currentCheckout.tip = Math.max(0, Math.round(Number(value) || 0));
+  refreshPaymentUI();
+}
+
 function refreshPaymentUI() {
   if (!currentCheckout) return;
+  const due = checkoutDue();
   const covered = currentTenders.reduce((s, t) => s + t.amount, 0);
-  const pending = Math.max(0, currentCheckout.total - covered);
+  const pending = Math.max(0, due - covered);
+  renderTipControls();
 
   const titleEl = document.querySelector('#paymentTitle');
-  if (titleEl) titleEl.textContent = `${escapeHtml(currentCheckout.customerName)} · ${money.format(currentCheckout.total)}`;
+  if (titleEl) titleEl.textContent = `${currentCheckout.customerName} · ${money.format(due)}`; // textContent: no hace falta escapar
 
   const totalEl = document.querySelector('#payTotalAmount');
-  if (totalEl) totalEl.textContent = money.format(currentCheckout.total);
+  if (totalEl) totalEl.textContent = money.format(due);
 
   const coveredEl = document.querySelector('#payCoveredAmount');
   if (coveredEl) coveredEl.textContent = money.format(covered);
@@ -1231,7 +1294,7 @@ function refreshPaymentUI() {
 
   const confirmBtn = document.querySelector('#confirmPaymentButton');
   if (confirmBtn) {
-    const isDone = covered >= currentCheckout.total;
+    const isDone = covered >= due;
     const canFinalizeDirectly = currentTenders.length === 0 && pending > 0;
     confirmBtn.disabled = !isDone && !canFinalizeDirectly;
     confirmBtn.textContent = isDone ? 'Finalizar Cobro' : `Cobrar ${money.format(pending)} con ${activePaymentMethod}`;
@@ -1276,7 +1339,7 @@ function updateTenderChange() {
 function addPaymentTender() {
   if (!currentCheckout) return;
   const covered = currentTenders.reduce((s, t) => s + t.amount, 0);
-  const pending = Math.max(0, currentCheckout.total - covered);
+  const pending = Math.max(0, checkoutDue() - covered);
   if (pending <= 0) return showToast('El total de la cuenta ya está cubierto.');
 
   let amount = Number(document.querySelector('#amountReceived')?.value || 0);
@@ -1379,8 +1442,9 @@ function confirmPayment() {
   const order = getOrder(currentCheckout?.orderId || state.currentOrderId);
   if (!order || !currentCheckout) return;
 
+  const due = checkoutDue(), tip = due - currentCheckout.total;
   let covered = currentTenders.reduce((s, t) => s + t.amount, 0);
-  const pending = Math.max(0, currentCheckout.total - covered);
+  const pending = Math.max(0, due - covered);
 
   if (pending > 0 && currentTenders.length === 0) {
     let received = pending;
@@ -1400,9 +1464,11 @@ function confirmPayment() {
       change
     });
     covered = pending;
-  } else if (covered < currentCheckout.total) {
-    return showToast(`Faltan ${money.format(currentCheckout.total - covered)} por cubrir.`);
+  } else if (covered < due) {
+    return showToast(`Faltan ${money.format(due - covered)} por cubrir.`);
   }
+  // La propina se reparte entre los medios de pago (su parte en tender.tip; tender.amount la incluye)
+  if (tip > 0) tipShares(currentTenders.map(t => t.amount), tip).forEach((share, i) => { currentTenders[i].tip = share; });
 
   let splitEntries = null; // partes iguales cobradas en este pago (se enlazan a la factura más abajo)
   // Cobrar primero (cafetería, mostrador): lo que aún no salió a cocina se envía ahora
@@ -1458,8 +1524,10 @@ function confirmPayment() {
       method: t.method,
       amount: t.amount,
       received: t.received || t.amount,
-      change: t.change || 0
+      change: t.change || 0,
+      ...(t.tip ? { tip: t.tip } : {})
     })),
+    ...(tip > 0 ? { tip } : {}), // propina voluntaria: aparte del consumo (amount)
     items: currentCheckout.items,
     pendingStock: globalThis.NexoSync?.stockItemsQty?.(currentCheckout.items), // lo que la nube descontará al subirla
     shiftId: state.cashShift.id,
@@ -1848,7 +1916,9 @@ function confirmOpenShift() {
     globalThis.NexoSync.syncCashShift(state.cashShift).catch(() => {});
   }
 }
-function openCloseDialog() { if(!isShiftOpen())return openShiftDialog();const expected=expectedCash(), totalSales=currentShiftPayments().reduce((sum,payment)=>sum+payment.amount,0);document.querySelector('#closeSummary').innerHTML=`<div><span>Base inicial</span><strong>${money.format(state.cashShift.openingCash || 0)}</strong></div><div><span>Ventas en efectivo</span><strong>${money.format(cashSalesToday())}</strong></div><div><span>Ventas por otros medios</span><strong>${money.format(otherSalesToday())}</strong></div><div><span>Compras y gastos en efectivo</span><strong>− ${money.format(cashExpensesToday()+cashPurchasesToday())}</strong></div><div><span>Venta total del turno</span><strong>${money.format(totalSales)}</strong></div>`;document.querySelector('#expectedCashInClose').textContent=money.format(expected);document.querySelector('#countedCash').value=0;resetCashCounter();document.querySelector('#cashDifference').textContent='';document.querySelector('#closeDialog').showModal(); }
+// Propinas del turno en el resumen del cierre: van aparte de las ventas (las de efectivo ya están en el efectivo esperado)
+function tipsCloseRow() { const t = tipsToday(); return t.total ? `<div><span>Propinas (no son ventas)</span><strong>${money.format(t.total)}${t.cash !== t.total ? ` · efectivo ${money.format(t.cash)}` : ''}</strong></div>` : ''; }
+function openCloseDialog() { if(!isShiftOpen())return openShiftDialog();const expected=expectedCash(), totalSales=currentShiftPayments().reduce((sum,payment)=>sum+payment.amount,0);document.querySelector('#closeSummary').innerHTML=`<div><span>Base inicial</span><strong>${money.format(state.cashShift.openingCash || 0)}</strong></div><div><span>Ventas en efectivo</span><strong>${money.format(cashSalesToday())}</strong></div><div><span>Ventas por otros medios</span><strong>${money.format(otherSalesToday())}</strong></div><div><span>Compras y gastos en efectivo</span><strong>− ${money.format(cashExpensesToday()+cashPurchasesToday())}</strong></div><div><span>Venta total del turno</span><strong>${money.format(totalSales)}</strong></div>${tipsCloseRow()}`;document.querySelector('#expectedCashInClose').textContent=money.format(expected);document.querySelector('#countedCash').value=0;resetCashCounter();document.querySelector('#cashDifference').textContent='';document.querySelector('#closeDialog').showModal(); }
 function checkCashDifference() { const diff=Number(document.querySelector('#countedCash').value||0)-expectedCash();const el=document.querySelector('#cashDifference');el.textContent=diff===0?'Caja cuadrada.':`${diff>0?'Sobrante':'Faltante'}: ${money.format(Math.abs(diff))}`;el.className=`change-message ${diff===0?'positive':'negative'}`; }
 let lastClosedShift = null;
 function confirmClose() {
@@ -1868,6 +1938,8 @@ function confirmClose() {
     otherSales: otherSalesToday(),
     cashExpenses: cashExpensesToday() + cashPurchasesToday(),
     totalSales,
+    tips: tipsToday().total,
+    tipsCash: tipsToday().cash,
     expected,
     counted,
     difference: counted - expected,
@@ -1902,6 +1974,8 @@ async function forceResetShift() {
     otherSales: otherSalesToday(),
     cashExpenses: cashExpensesToday() + cashPurchasesToday(),
     totalSales: currentShiftPayments().reduce((sum, p) => sum + p.amount, 0),
+    tips: tipsToday().total,
+    tipsCash: tipsToday().cash,
     expected: expectedCash(),
     counted: 0,
     difference: -expectedCash(),
@@ -1981,7 +2055,7 @@ function buildCloseWhatsappUrl(closedShift) {
         else if (k.toLowerCase().includes('daviplata')) k = 'Daviplata';
         else if (k.toLowerCase().includes('transf')) k = 'Transferencia';
         else if (k.toLowerCase().includes('efectivo')) k = 'Efectivo';
-        tenders[k] = (tenders[k] || 0) + t.amount;
+        tenders[k] = (tenders[k] || 0) + tenderSale(t);
       });
     } else {
       let k = p.method;
@@ -2006,6 +2080,7 @@ function buildCloseWhatsappUrl(closedShift) {
     `📅 Fecha: ${closedDateStr}`,
     `👤 Turno cerrado por: ${cashierName}`,
     `💰 *Total Ventas:* ${money.format(totalSales)}`,
+    ...(closedShift.tips ? [`🤝 Propinas (aparte de las ventas): ${money.format(closedShift.tips)}`] : []),
     `--------------------------`,
     `💵 Efectivo: ${money.format(tenders['Efectivo'] || 0)}`,
     `📱 Nequi: ${money.format(tenders['Nequi'] || 0)}`,
@@ -2092,6 +2167,7 @@ function renderPrintSettings() {
     if (!printerList) loadPrinterList();
   }
   if (typeof renderKitchenSettings === 'function') renderKitchenSettings();
+  if (typeof renderTipSettings === 'function') renderTipSettings();
 }
 function savePrintSetting(key, value) { printSettings()[key] = value; saveState(); renderPrintSettings(); }
 globalThis.printPaymentReceipt = printPaymentReceipt;
@@ -2308,6 +2384,12 @@ if (searchEl) {
 // Receta en el formulario de producto y unidad del formulario de insumo
 document.addEventListener('input', e => { if (e.target.dataset?.recipeField === 'qty') updateRecipeDraft(e.target); else if (e.target.id === 'productPrice' && typeof updateRecipeSummary === 'function') updateRecipeSummary(); });
 document.addEventListener('change', e => { if (e.target.dataset?.recipeField && e.target.dataset.recipeField !== 'qty') updateRecipeDraft(e.target); else if (e.target.id === 'productType') toggleProductType(); else if (e.target.id === 'insumoUnit') updateInsumoUnitLabels(); });
+// Propina voluntaria en el cobro (quitar, volver a poner o cambiar el valor) y su porcentaje sugerido en «Mi negocio»
+document.addEventListener('change', e => {
+  if (e.target.id === 'tipEnabled' && currentCheckout) setCheckoutTip(e.target.checked ? (currentCheckout.tipSuggested || Math.round(currentCheckout.total * tipPercent() / 100)) : 0);
+  else if (e.target.id === 'tipPercentInput') saveTipPercent(e.target.value);
+});
+document.addEventListener('input', e => { if (e.target.id === 'tipAmount') setCheckoutTip(e.target.value); });
 // Nota para cocina de una línea: se guarda sin volver a pintar (no pierde el foco); sale en la próxima comanda
 document.addEventListener('input', e => { const productId = e.target.dataset?.kitchenNote; if (productId === undefined) return; const item = getOrder(state.currentOrderId)?.items.find(i => i.productId === productId); if (item) { item.kitchenNote = e.target.value.slice(0, 80); saveState(); } });
 document.addEventListener('change', e => { const category = e.target.dataset?.kitchenCategory; if (category !== undefined) { setKitchenStation(category, e.target.value); showToast(`${category}: ${KITCHEN_STATION_OPTIONS[e.target.value]}.`); } else if (e.target.dataset?.stationPrinter) { printSettings().stationPrinters = { ...(printSettings().stationPrinters || {}), [e.target.dataset.stationPrinter]: e.target.value }; saveState(); } });

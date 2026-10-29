@@ -177,6 +177,15 @@
             <label class="check-row" data-desktop-only hidden><input type="checkbox" id="printSilent" /> Imprimir directo, sin mostrar el diálogo de impresión</label>
             <div class="backup-actions"><button id="printTestButton" class="outline-button" type="button">🖨 Imprimir ticket de prueba</button></div>
           </article>
+          <article class="data-card backup-card print-settings-card" id="tipSettingsCard">
+            <h3>Propina voluntaria</h3>
+            <p class="muted">Se sugiere al cobrar los pedidos de mesa y el cajero la puede quitar o cambiar. No cuenta como venta: en el cierre de caja y en el Ticket Z va aparte. 0 % la desactiva.</p>
+            <div class="print-settings-grid">
+              <label class="field-label" for="tipPercentInput">Propina sugerida (%)
+                <input id="tipPercentInput" type="number" min="0" max="30" step="1" inputmode="numeric" />
+              </label>
+            </div>
+          </article>
           <article class="data-card backup-card print-settings-card kitchen-settings-card" id="kitchenSettingsCard">
             <h3>Comandas de cocina</h3>
             <p class="muted">Elige a qué estación va cada categoría. «Enviar a cocina» imprime solo lo nuevo, sin precios; lo que se quita después de enviado sale como anulación.</p>
@@ -326,6 +335,11 @@
         <div class="pay-sum-card"><span>Total a pagar</span><strong id="payTotalAmount">$0</strong></div>
         <div class="pay-sum-card"><span>Cubierto</span><strong id="payCoveredAmount" class="text-success">$0</strong></div>
         <div class="pay-sum-card highlight"><span>Saldo pendiente</span><strong id="payPendingAmount" class="text-pending">$0</strong></div>
+      </div>
+      <div class="tip-row" id="tipRow" hidden>
+        <label class="tip-toggle"><input type="checkbox" id="tipEnabled" /> <span id="tipLabel">Propina voluntaria</span></label>
+        <input id="tipAmount" type="number" min="0" step="100" inputmode="numeric" aria-label="Valor de la propina" />
+        <small id="tipHint" class="muted"></small>
       </div>
       <div class="payment-tender-section">
         <label class="field-label">Método de pago</label>

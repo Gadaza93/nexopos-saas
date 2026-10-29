@@ -52,6 +52,7 @@ run(`
     state.inventory = [{ id: 'inv1', name: 'Cerveza', qty: 100, min: 5, unit: 'und' }];
     state.orders = [{ id: 'ord_t', tableId: 't1', tableName: 'Mesa 1', status: 'open', createdAt: Date.now(), items: [{ productId: 'p1', name: 'Cerveza', price, cost: 3000, qty, inventoryId: 'inv1' }] }];
     state.currentOrderId = 'ord_t';
+    state.profile.tipPercent = 0; // esta prueba no es de propina (scratch/test-propina.js)
     splitBillData.people = 2; splitBillData.mode = 'equal';
     toasts.length = 0;
   }
