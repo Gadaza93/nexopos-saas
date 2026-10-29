@@ -8,6 +8,8 @@
     <meta name="theme-color" content="#12141A" />
     <meta name="description" content="NexoPos · POS Inteligente para Restaurantes y Cafeterías con funcionamiento local y sin conexión." />
     <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
     <script>try{var t=localStorage.getItem("nexopos-theme")||localStorage.getItem("brasa-theme");if(t==="light")document.documentElement.dataset.theme="light";}catch(e){}</script>
     <script src="./supabase.min.js" defer></script>
     <link rel="stylesheet" href="theme.css" />
@@ -18,7 +20,7 @@
   <body>
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand"><span class="brand-mark" id="brandMark"><img src="logo.png" alt="NexoPos" width="765" height="1024" decoding="async" /></span><span id="brandLabel">Nexo<strong>Pos</strong></span></div>
+        <div class="brand"><span class="brand-mark" id="brandMark"><img src="logo.png" alt="NexoPos" width="1024" height="1024" decoding="async" /></span><span id="brandLabel">Nexo<strong>Pos</strong></span></div>
         <nav aria-label="Navegación principal">
           <button class="nav-link active" data-view="pos" data-perm="view.pos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg> Punto de venta</button>
           <button class="nav-link" data-view="invoices" data-perm="view.invoices"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-2.4-1.6-2.4 1.6-2.4-1.6-2.4 1.6L6 20.5z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></svg> Facturas</button>
@@ -498,7 +500,7 @@
 
 
     <dialog id="loginDialog" class="small-dialog login-dialog">
-      <div class="login-brand"><span class="brand-mark"><img src="logo.png" alt="NexoPos" width="765" height="1024" decoding="async" /></span><h2 id="loginTitle">NexoPos</h2><p class="muted">Selecciona tu usuario e ingresa tu PIN</p></div>
+      <div class="login-brand"><span class="brand-mark"><img src="logo.png" alt="NexoPos" width="1024" height="1024" decoding="async" /></span><h2 id="loginTitle">NexoPos</h2><p class="muted">Selecciona tu usuario e ingresa tu PIN</p></div>
       <div id="loginUsers" class="login-users"></div>
       <div id="loginPinBox" class="login-pin" hidden>
         <p class="login-who"><button id="loginBackButton" class="text-add-button">← Cambiar usuario</button><strong id="loginWho"></strong></p>
@@ -515,7 +517,7 @@
     <!-- Activación de terminal: bloquea el POS hasta vincular la caja a un negocio -->
     <dialog id="activationDialog" class="small-dialog login-dialog activation-dialog" aria-labelledby="activationTitle">
       <div class="login-brand activation-brand">
-        <span class="brand-mark"><img src="logo.png" alt="NexoPos" width="765" height="1024" fetchpriority="high" /></span>
+        <span class="brand-mark"><img src="logo.png" alt="NexoPos" width="1024" height="1024" fetchpriority="high" /></span>
         <p class="eyebrow">NexoPos</p>
         <h2 id="activationTitle">Vincular Terminal</h2>
         <p class="muted">Ingresa las credenciales maestras de tu negocio para activar esta caja</p>

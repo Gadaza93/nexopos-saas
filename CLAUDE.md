@@ -134,6 +134,7 @@ Al final de `<body>`, todos con `defer` (se ejecutan en este orden al terminar d
 - **Modo Día**: `html[data-theme="light"]` redefine los tokens en `theme.css`.
 - Radios `--r-sm 8px`, `--r-md 14px`, `--r-lg 22px`; fuentes `--font-ui` (Segoe UI Variable/Inter) y `--font-display` (Bahnschrift).
 - Los modales del modo demo usan las clases `.obsidian-modal` / `.obsidian-badge` (`design.css`).
+- **Logo e íconos**: las fuentes son SVG en `build/` (símbolo «N» de cinta plegada heredado de NexoBar): `logo.svg` → `logo.png` (1024 × 1024, fondo `#16181F` igual al de `.brand-mark`), `icon.svg` → `build/icon.png` (512, app de Windows) e `icon-maskable.svg` → `icon-192.png` / `icon-512.png` (PWA y favicon, a sangre con el símbolo en la zona segura). Para cambiarlos, editar el SVG y volver a exportar el PNG del mismo tamaño; no editar los PNG a mano.
 - Diseño responsive: punto de quiebre principal `@media (max-width: 768px)` con menú hamburguesa.
 
 ## Pruebas
