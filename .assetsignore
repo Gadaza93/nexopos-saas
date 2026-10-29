@@ -18,3 +18,4 @@ package-lock.json
 wrangler.json
 comercial-nexobar
 supabase
+.wrangler

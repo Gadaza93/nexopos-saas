@@ -6,3 +6,4 @@ dist/
 Thumbs.db
 supabase/.temp/
 .claude/launch.json
+.wrangler/

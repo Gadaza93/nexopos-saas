@@ -1,7 +1,6 @@
-const CACHE = 'nexopos-v49';
+const CACHE = 'nexopos-v50';
 const ASSETS = [
-  './',
-  './index.html',
+  './', // la app se abre por la raíz: en Cloudflare /index.html redirige a / (no se cachea una redirección)
   './theme.css',
   './styles.css',
   './design.css',
@@ -34,12 +33,15 @@ self.addEventListener('fetch', event => {
     caches.match(event.request).then(cached => {
       if (cached) return cached;
       return fetch(event.request).then(response => {
-        const copy = response.clone();
-        caches.open(CACHE).then(cache => cache.put(event.request, copy));
+        // Solo respuestas correctas del mismo sitio y sin redirección: una redirigida no sirve para abrir la app sin conexión
+        if (response.ok && response.type === 'basic' && !response.redirected) {
+          const copy = response.clone();
+          caches.open(CACHE).then(cache => cache.put(event.request, copy));
+        }
         return response;
       }).catch(() => {
         if (event.request.mode === 'navigate' || event.request.destination === 'document') {
-          return caches.match('./index.html');
+          return caches.match('./');
         }
         return caches.match(event.request);
       });
