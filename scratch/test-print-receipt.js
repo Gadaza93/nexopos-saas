@@ -38,10 +38,12 @@ const payment = {
   console.log('   ✅ Comprobante: logo, negocio, factura, fecha, mesa, cajero, productos, total, pago y leyenda.');
 
   assert.match(print.buildReceiptHtml(payment, { profile, paperWidth: 58 }), /width: 48mm/);
-  assert.strictEqual(print.receiptLocation('Venta en barra'), 'Barra');
-  assert.strictEqual(print.receiptLocation(''), 'Barra');
+  assert.strictEqual(print.receiptLocation('Venta en mostrador'), 'Mostrador');
+  assert.strictEqual(print.receiptLocation(''), 'Mostrador');
+  assert.strictEqual(print.receiptLocation('Venta en barra'), 'Mostrador', 'la etiqueta antigua de venta rápida');
+  assert.strictEqual(print.receiptLocation('Barra 2'), 'Barra', 'las barras del plano siguen como Barra');
   assert.strictEqual(print.receiptLocation('Mesa 3 · Fracción 1/2'), 'Mesa 3 · Fracción 1/2');
-  console.log('   ✅ Rollos de 58 mm (48 mm útiles) y 80 mm (72 mm útiles); ventas en barra se rotulan «Barra».');
+  console.log('   ✅ Rollos de 58 mm (48 mm útiles) y 80 mm (72 mm útiles); ventas de mostrador se rotulan «Mostrador».');
 
   const hostile = print.buildReceiptHtml({ ...payment, customer: '<img src=x onerror=alert(1)>', items: [{ name: '<script>x</script>', qty: 1, price: 1 }] }, { profile: { ...profile, image: 'https://evil.example/logo.png' } });
   assert.doesNotMatch(hostile, /<img src=x|<script>x/);

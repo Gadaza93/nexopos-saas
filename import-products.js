@@ -180,11 +180,11 @@
   async function downloadProductTemplate() {
     const headers = ['Categoría', 'Nombre ítem', 'Precio Venta', 'Costo Unitario', 'Stock Actual', 'Stock Mínimo', 'Unidad', 'Código'];
     const sampleRows = [
-      ['Cervezas', 'Cerveza Corona 330ml', 9000, 4800, 48, 12, 'Unidad', '770123456789'],
-      ['Licores', 'Aguardiente Antioqueño 750ml', 85000, 48000, 15, 4, 'Botella', '770987654321'],
-      ['Cócteles', 'Mojito Clásico', 22000, 6500, 30, 8, 'Copa', 'COCT-001'],
-      ['Bebidas', 'Agua Manantial con Gas 300ml', 5000, 1800, 24, 6, 'Botella', '770555111222'],
-      ['Snacks', 'Papas Pringles Original 124g', 14000, 7500, 20, 5, 'Unidad', 'SNK-002']
+      ['Platos fuertes', 'Bandeja paisa', 32000, 14000, 10, 3, 'Porción', 'PLA-001'],
+      ['Entradas', 'Empanadas x3', 8000, 3000, 20, 5, 'Porción', 'ENT-001'],
+      ['Cafetería', 'Capuchino', 6500, 2200, 30, 8, 'Unidad', 'CAF-001'],
+      ['Bebidas', 'Gaseosa Coca-Cola 400ml', 4000, 2000, 24, 6, 'Unidad', '770555111222'],
+      ['Postres', 'Torta de chocolate', 9500, 3800, 8, 2, 'Porción', 'POS-001']
     ];
 
     const xlsxLib = await loadXlsxLib();

@@ -884,7 +884,7 @@ function renderReports() {
    ajuste negativa por esos abonos, de modo que la suma de importes es exactamente el total de la cuenta. Las compras de
    mercancía no se restan como gasto porque su costo ya entra en el costo de ventas. */
 let reportTab = 'summary', netRange = 'month', netFrom = '', netTo = '';
-const NET_EXPENSE_GROUPS = ['Arriendo', 'Servicios', 'Personal / DJ', 'Insumos / caja menor', 'Otros'];
+const NET_EXPENSE_GROUPS = ['Arriendo', 'Servicios', 'Personal', 'Insumos / caja menor', 'Otros'];
 function netBounds() {
   const end = today(), base = parseISO(end);
   if (netRange === 'today') return { from: end, to: end };
@@ -899,7 +899,7 @@ function expenseGroup(expense) {
   const classify = text => {
     const s = String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     if (/arriendo|alquiler|canon|\brenta\b/.test(s)) return 'Arriendo';
-    if (/nomina|personal|\bdj\b|musica|musico|salario|sueldo|honorario|prestacion|seguridad social|pago de turno|turnos? de|mesero|bartender|vigilan/.test(s)) return 'Personal / DJ';
+    if (/nomina|personal|\bdj\b|musica|musico|salario|sueldo|honorario|prestacion|seguridad social|pago de turno|turnos? de|mesero|bartender|barista|cociner|chef|ayudante de cocina|vigilan/.test(s)) return 'Personal';
     if (/servicio|\bluz\b|energia|\bagua\b|acueducto|alcantarillado|\bgas\b|internet|telefon|celular|\bplan\b|television|\btv\b/.test(s)) return 'Servicios';
     if (/insumo|caja menor|transporte|domicilio|mantenimiento|reparacion|aseo|limpieza|hielo|desechable|papeleria|ferreteria/.test(s)) return 'Insumos / caja menor';
     return '';

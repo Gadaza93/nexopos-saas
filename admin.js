@@ -62,7 +62,7 @@ const planLabel = plan => PLAN_LABELS[String(plan || '').toLowerCase()] || Strin
 const otherPlan = plan => String(plan || '').toLowerCase() === 'basico' ? 'pro' : 'basico'; // botón de cambio de plan de cada fila
 const NEGOCIO_ID_RE = /^[a-z0-9_]{3,40}$/;
 // Palabras genéricas del tipo de local que no aportan al ID: «Gastrobar La Estación» → bar_la_estacion
-const GENERIC_VENUE_WORDS = /^(?:(?:gastro)?bar|restobar|pub|taberna|cantina|discoteca|licorera|estadero)_+/;
+const GENERIC_VENUE_WORDS = /^(?:(?:gastro)?bar|restobar|restaurante|cafeteria|cafe|panaderia|pub|taberna|cantina|discoteca|licorera|estadero)_+/;
 function slugifyNegocioId(nombre) {
   const base = String(nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -90,7 +90,7 @@ function buildCreatePayload({ nombre, negocioId, email, password, plan, dias }) 
   const p_nombre = String(nombre || '').trim(), p_id = String(negocioId || '').trim().toLowerCase();
   const p_email = String(email || '').trim().toLowerCase(), p_password = String(password || '');
   const p_plan = String(plan || '').toLowerCase(), p_dias_vigencia = Number(dias);
-  if (p_nombre.length < 2) return { ok: false, field: 'nombre', error: 'Escribe el nombre del bar.' };
+  if (p_nombre.length < 2) return { ok: false, field: 'nombre', error: 'Escribe el nombre del negocio.' };
   if (!NEGOCIO_ID_RE.test(p_id)) return { ok: false, field: 'id', error: 'El ID debe tener entre 3 y 40 caracteres: minúsculas, números o guion bajo.' };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p_email)) return { ok: false, field: 'email', error: 'Escribe un correo electrónico válido.' };
   if (p_password.length < 8 || /\s/.test(p_password)) return { ok: false, field: 'password', error: 'La contraseña debe tener al menos 8 caracteres y sin espacios.' };
@@ -326,7 +326,7 @@ async function handleNegocioSubmit(event) {
 }
 function showCreatedDialog(payload) {
   lastCreated = payload;
-  const rows = [['Bar', payload.p_nombre], ['ID de negocio', payload.p_id], ['Correo', payload.p_email], ['Contraseña', payload.p_password, true], ['Plan', planLabel(payload.p_plan)], ['Vigencia', `${payload.p_dias_vigencia} días`]];
+  const rows = [['Negocio', payload.p_nombre], ['ID de negocio', payload.p_id], ['Correo', payload.p_email], ['Contraseña', payload.p_password, true], ['Plan', planLabel(payload.p_plan)], ['Vigencia', `${payload.p_dias_vigencia} días`]];
   $('#negocioCreatedSummary').innerHTML = rows.map(([label, value, secret]) => `<dt>${escapeAdminHtml(label)}</dt><dd${secret ? ' class="is-secret"' : ''}>${escapeAdminHtml(value)}</dd>`).join('');
   $('#negocioCopyStatus').textContent = '';
   $('#negocioCreatedDialog').showModal(); $('#negocioCopyCredentials').focus();

@@ -24,7 +24,8 @@ function receiptLogo(image) {
 }
 function receiptLocation(customer) {
   const name = String(customer || '').trim();
-  return !name || /barra|mostrador/i.test(name) ? 'Barra' : name;
+  if (!name || /^venta en (mostrador|barra)$|mostrador/i.test(name)) return 'Mostrador'; // venta rápida sin mesa (también la etiqueta antigua)
+  return /barra/i.test(name) ? 'Barra' : name;
 }
 
 function receiptDocument(title, body, { paperWidth = 80 } = {}) {

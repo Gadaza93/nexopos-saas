@@ -567,7 +567,7 @@ function configuracionNegocio(prof, { orders, cashShift } = {}) {
 }
 
 /* Escritura de la fila del negocio. En Supabase las cajas solo pueden ACTUALIZAR `nombre` y `configuracion` (permisos
-   por columna) y no pueden crear filas: así un bar no puede tocar activo, plan ni fecha_vencimiento. La fila la crea el
+   por columna) y no pueden crear filas: así un negocio no puede tocar activo, plan ni fecha_vencimiento. La fila la crea el
    SuperAdmin (admin_create_negocio). Antes se usaba upsert con todas las columnas y Supabase lo rechazaba siempre (403). */
 async function actualizarNegocio(sb, payload) {
   const { data, error } = await sb.from("negocios")
@@ -994,7 +994,7 @@ function pedidoAFila(o, bId) {
     id: toValidUuid(o.id),
     business_id: String(bId || DEFAULT_BUSINESS_ID),
     mesa_id: String(o.tableId || "walkin"),
-    nombre_mesa: String(o.tableName || (o.tableId === "walkin" ? "Venta en barra" : "Mesa")),
+    nombre_mesa: String(o.tableName || (o.tableId === "walkin" ? "Venta en mostrador" : "Mesa")),
     cliente: String(o.customer || (o.isCustom ? o.tableName : "") || ""),
     items: Array.isArray(items) ? items : [],
     subtotal: total,
@@ -1014,7 +1014,7 @@ function filaAPedido(row) {
     ...meta,
     id: String(meta.id || row.id),
     tableId: meta.tableId || row.mesa_id || "walkin",
-    tableName: meta.tableName || row.nombre_mesa || (row.tipo === "barra" ? "Venta en barra" : "Mesa"),
+    tableName: meta.tableName || row.nombre_mesa || (row.tipo === "barra" ? "Venta en mostrador" : "Mesa"),
     customer: meta.customer ?? row.cliente ?? "",
     isCustom: meta.isCustom ?? row.tipo === "personalizada",
     items: Array.isArray(row.items) ? row.items : [],
@@ -1119,7 +1119,7 @@ async function syncOrders(options = {}) {
             id: toValidUuid(o.id),
             business_id: String(bId || DEFAULT_BUSINESS_ID),
             mesa_id: String(o.tableId || "walkin"),
-            nombre_mesa: String(o.tableName || (o.tableId === "walkin" ? "Venta en barra" : "Mesa")),
+            nombre_mesa: String(o.tableName || (o.tableId === "walkin" ? "Venta en mostrador" : "Mesa")),
             cliente: String(o.customer || (o.isCustom ? o.tableName : "") || ""),
             items: Array.isArray(o.items) ? o.items : [],
             subtotal: orderTotalAmount,
@@ -1262,7 +1262,7 @@ function mergeRemoteOrders(remoteOrders, { completa = true } = {}) {
         state.orders.push({
           id: String(ro.id),
           tableId: ro.tableId || "walkin",
-          tableName: ro.tableName || "Venta en barra",
+          tableName: ro.tableName || "Venta en mostrador",
           isCustom: Boolean(ro.isCustom),
           items: Array.isArray(ro.items) ? ro.items : [],
           note: ro.note || "",

@@ -77,8 +77,8 @@ console.log('   ✅ Hoy: ventas $150.000 − costo $75.000 − gastos $88.000 = 
 
 // --- B. Agrupación por categoría ---
 const groups = Object.fromEntries(Object.entries(d.groups).map(([k, g]) => [k, g.total]));
-assert.deepStrictEqual(groups, { Arriendo: 50000, Servicios: 10000, 'Personal / DJ': 20000, 'Insumos / caja menor': 5000, Otros: 3000 });
-console.log('   ✅ Gastos agrupados: Arriendo, Servicios, Personal / DJ (por descripción), Insumos / caja menor y Otros.');
+assert.deepStrictEqual(groups, { Arriendo: 50000, Servicios: 10000, 'Personal': 20000, 'Insumos / caja menor': 5000, Otros: 3000 });
+console.log('   ✅ Gastos agrupados: Arriendo, Servicios, Personal (por descripción), Insumos / caja menor y Otros.');
 
 // --- C. Rangos: el mes pasado no se mezcla con este mes ---
 run('netRange = "lastMonth";'); const lm = get('netBounds()'); d = get('netProfitDataset(netBounds().from, netBounds().to)');

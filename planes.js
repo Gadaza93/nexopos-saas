@@ -5,7 +5,7 @@
    Pro: ningún negocio existente pierde funciones antes de saber su plan.
    Validación en la nube: el trigger negocios_limite_mesas no deja crecer el plano de un negocio Básico por encima de
    PLAN_MAX_MESAS (ver CLAUDE.md). Los reportes, la valoración y las exportaciones se calculan en el equipo con datos del
-   propio bar: su restricción es de la app. */
+   propio negocio: su restricción es de la app. */
 
 const PLAN_MAX_MESAS = 10; // mismo valor que el trigger de Supabase
 // Línea de soporte y ventas de Netxpremium (wa.me, con indicativo y sin «+»). También la usa el modal del modo demo (app.js).

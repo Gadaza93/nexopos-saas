@@ -3,8 +3,8 @@ const money = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP
 globalThis.money = money;
 const defaultState = {
   zone: 'Todas', activeCategory: 'Todos', search: '', currentOrderId: null, paymentMethod: 'Efectivo',
-  categories: ['Cervezas', 'Cocteles', 'Licores', 'Sin alcohol', 'Comidas', 'Otros'],
-  profile: { name: 'Mi Bar', nit: '', address: '', phone: '', ownerPhone: '+57', syncId: 'nexopos_default', image: null },
+  categories: ['Entradas', 'Platos fuertes', 'Cafetería', 'Bebidas', 'Postres', 'Otros'],
+  profile: { name: 'Mi Restaurante', nit: '', address: '', phone: '', ownerPhone: '+57', syncId: 'nexopos_default', image: null },
   cashShift: { status: 'closed' },
   tables: [
     { id: 'b1', name: 'Barra 1', zone: 'Barra', type: 'bar' }, { id: 'b2', name: 'Barra 2', zone: 'Barra', type: 'bar' },
@@ -21,20 +21,20 @@ globalThis.state = state;
 globalThis.defaultState = defaultState;
 
 const DEMO_PRODUCTS = [
-  { id: 'demo_1', name: 'Cerveza Corona Extra 355ml', category: 'Cervezas', price: 9000, cost: 4800, stock: 18, icon: '🍺' },
-  { id: 'demo_2', name: 'Cerveza Club Colombia Dorada', category: 'Cervezas', price: 7000, cost: 3500, stock: 24, icon: '🍺' },
-  { id: 'demo_3', name: 'Papas Francesas Rústicas', category: 'Comidas', price: 15000, cost: 6000, stock: 15, icon: '🍟' },
-  { id: 'demo_4', name: 'Cerveza Stella Artois', category: 'Cervezas', price: 10000, cost: 5200, stock: 15, icon: '🍺' },
-  { id: 'demo_5', name: 'Mojito Clásico', category: 'Cocteles', price: 20000, cost: 7000, stock: 12, icon: '🍸' },
-  { id: 'demo_6', name: 'Gin Tonic Gordons', category: 'Cocteles', price: 24000, cost: 8500, stock: 10, icon: '🍸' },
-  { id: 'demo_7', name: 'Margarita Tradicional', category: 'Cocteles', price: 22000, cost: 8000, stock: 14, icon: '🍸' },
-  { id: 'demo_8', name: 'Aguardiente Antioqueño Azul 750ml', category: 'Licores', price: 75000, cost: 42000, stock: 6, icon: '🍾' },
-  { id: 'demo_9', name: 'Ron Medellín Añejo 8 Años', category: 'Licores', price: 95000, cost: 55000, stock: 5, icon: '🍾' },
-  { id: 'demo_10', name: 'Whisky Old Parr 12 Años', category: 'Licores', price: 180000, cost: 110000, stock: 4, icon: '🥃' },
-  { id: 'demo_11', name: 'Agua Manantial con Gas 600ml', category: 'Sin alcohol', price: 3500, cost: 1500, stock: 20, icon: '🥤' },
-  { id: 'demo_12', name: 'Gaseosa Coca-Cola 400ml', category: 'Sin alcohol', price: 4000, cost: 2000, stock: 24, icon: '🥤' },
-  { id: 'demo_13', name: 'Red Bull Energy Drink', category: 'Sin alcohol', price: 12000, cost: 7000, stock: 16, icon: '⚡' },
-  { id: 'demo_14', name: 'Nachos con Queso y Guacamole', category: 'Comidas', price: 18000, cost: 7500, stock: 12, icon: '🧀' }
+  { id: 'demo_1', name: 'Café americano', category: 'Cafetería', price: 4000, cost: 1200, stock: 40, icon: '☕' },
+  { id: 'demo_2', name: 'Capuchino', category: 'Cafetería', price: 6500, cost: 2200, stock: 30, icon: '☕' },
+  { id: 'demo_3', name: 'Papas a la francesa', category: 'Entradas', price: 9000, cost: 3500, stock: 15, icon: '🍟' },
+  { id: 'demo_4', name: 'Empanadas x3', category: 'Entradas', price: 8000, cost: 3000, stock: 20, icon: '🥟' },
+  { id: 'demo_5', name: 'Bandeja paisa', category: 'Platos fuertes', price: 32000, cost: 14000, stock: 10, icon: '🍛' },
+  { id: 'demo_6', name: 'Pechuga a la plancha', category: 'Platos fuertes', price: 26000, cost: 11000, stock: 12, icon: '🍗' },
+  { id: 'demo_7', name: 'Hamburguesa de la casa', category: 'Platos fuertes', price: 24000, cost: 10000, stock: 14, icon: '🍔' },
+  { id: 'demo_8', name: 'Almuerzo ejecutivo', category: 'Platos fuertes', price: 18000, cost: 8000, stock: 25, icon: '🍽️' },
+  { id: 'demo_9', name: 'Croissant de jamón y queso', category: 'Cafetería', price: 7500, cost: 3000, stock: 12, icon: '🥐' },
+  { id: 'demo_10', name: 'Torta de chocolate', category: 'Postres', price: 9500, cost: 3800, stock: 8, icon: '🍰' },
+  { id: 'demo_11', name: 'Agua con gas 600ml', category: 'Bebidas', price: 3500, cost: 1500, stock: 20, icon: '🥤' },
+  { id: 'demo_12', name: 'Gaseosa Coca-Cola 400ml', category: 'Bebidas', price: 4000, cost: 2000, stock: 24, icon: '🥤' },
+  { id: 'demo_13', name: 'Limonada de coco', category: 'Bebidas', price: 9000, cost: 3200, stock: 16, icon: '🥥' },
+  { id: 'demo_14', name: 'Jugo natural en agua', category: 'Bebidas', price: 6000, cost: 2000, stock: 18, icon: '🧃' }
 ];
 globalThis.DEMO_PRODUCTS = DEMO_PRODUCTS;
 
@@ -72,7 +72,7 @@ function getInitialDemoState() {
     search: '',
     currentOrderId: null,
     paymentMethod: 'Efectivo',
-    categories: ['Todos', 'Cervezas', 'Cocteles', 'Licores', 'Sin alcohol', 'Comidas'],
+    categories: ['Todos', 'Entradas', 'Platos fuertes', 'Cafetería', 'Bebidas', 'Postres'],
     profile: {
       name: 'NexoPos (Demo Sandbox)',
       nit: '900.000.000-DEMO',
@@ -92,7 +92,7 @@ function getInitialDemoState() {
     expenses: [],
     closedShifts: [],
     users: [demoUser],
-    suppliers: [{ id: 'sup_demo_1', name: 'Distribuidora de Licores Demo', nit: '800.123.456-1', phone: '310 000 0000', notes: 'Proveedor simulado' }],
+    suppliers: [{ id: 'sup_demo_1', name: 'Distribuidora de Alimentos Demo', nit: '800.123.456-1', phone: '310 000 0000', notes: 'Proveedor simulado' }],
     stockLog: [],
     auditLog: [],
     invoiceCounter: 0,
@@ -514,13 +514,13 @@ function renderCustomOrders() {
   const listEl = document.querySelector('#customOrdersList');
   if (!listEl) return;
   if (!orders.length) {
-    listEl.innerHTML = '<p class="muted">No hay cuentas personalizadas ni pedidos en barra abiertos.</p>';
+    listEl.innerHTML = '<p class="muted">No hay cuentas personalizadas ni pedidos de mostrador abiertos.</p>';
     return;
   }
   listEl.innerHTML = orders.map(order => {
     const totalItems = order.items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
     const totalMoney = orderPending(order);
-    const tag = order.isCustom ? 'Personalizada' : (order.tableId === 'walkin' ? 'Barra' : 'Comanda');
+    const tag = order.isCustom ? 'Personalizada' : (order.tableId === 'walkin' ? 'Mostrador' : 'Comanda');
     return `<div class="custom-order-card" data-order-card="${order.id}"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><strong>${escapeHtml(order.tableName || 'Cuenta')}</strong><span class="history-tag" style="font-size:9px;padding:2px 5px;">${tag}</span></div><span style="color:var(--muted);font-size:12px;margin-top:4px;display:block;">${totalItems} ${totalItems === 1 ? 'producto' : 'productos'} · ${elapsedLabel(order.createdAt)}</span></div><b style="color:var(--accent);font-size:15px;white-space:nowrap;">${money.format(totalMoney)}</b></div><div style="display:flex;gap:6px;margin-top:12px;"><button class="outline-button" style="flex:1;padding:6px 8px;font-size:12px;" data-open-custom-order="${order.id}">Ver / Editar</button><button class="primary-button" style="flex:1;padding:6px 8px;font-size:12px;" data-pay-custom-order="${order.id}">Cobrar</button><button class="remove-line" style="padding:4px 8px;" data-delete-custom-order="${order.id}" title="Anular cuenta">×</button></div></div>`;
   }).join('');
 }
@@ -706,7 +706,7 @@ function openOrder(tableId = null) {
   if (!checkShiftIsOpen()) return;
   let table;
   if (tableId) table = state.tables.find(t => t.id === tableId);
-  else table = { id: 'walkin', name: 'Venta en barra', zone: 'Barra' };
+  else table = { id: 'walkin', name: 'Venta en mostrador', zone: 'Mostrador' };
   if (!table) table = { id: tableId || 'walkin', name: 'Mesa', zone: 'Salón' };
 
   let order = activeOrderForTable(table.id);

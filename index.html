@@ -281,7 +281,7 @@
         <button type="button" class="order-tab-btn" id="orderTabTicket" data-tab="ticket"><span>&#128203;</span> Cuenta <span id="mobileOrderCount" class="badge">0</span></button>
       </div>
       <div class="order-layout">
-        <section class="catalog-panel"><div class="search-wrap"><input id="productSearch" type="search" placeholder="Buscar bebida, plato o cóctel" /><span>⌕</span></div><div id="categoryTabs" class="category-tabs"></div><div id="productGrid" class="product-grid"></div></section>
+        <section class="catalog-panel"><div class="search-wrap"><input id="productSearch" type="search" placeholder="Buscar plato, bebida o postre" /><span>⌕</span></div><div id="categoryTabs" class="category-tabs"></div><div id="productGrid" class="product-grid"></div></section>
         <!-- Barra flotante visible solo en móvil cuando se ve el catálogo -->
         <div class="mobile-order-bar" id="mobileOrderBar">
           <div class="mobile-order-bar-info" id="mobileBarInfo" title="Ver cuenta">
@@ -404,8 +404,8 @@
 
     <dialog id="productDialog" class="small-dialog">
       <div class="dialog-header"><div><p class="eyebrow">CATÁLOGO</p><h2>Nuevo producto</h2></div><button class="icon-button" data-close="productDialog" aria-label="Cerrar">×</button></div>
-      <label class="field-label" for="productName">Nombre del producto</label><input id="productName" type="text" placeholder="Ej. Cerveza artesanal 330 ml" />
-      <label class="field-label" for="productCategory">Categoría</label><input id="productCategory" type="text" list="categoryOptions" placeholder="Ej. Cervezas" /><datalist id="categoryOptions"><option>Cervezas</option><option>Cocteles</option><option>Licores</option><option>Sin alcohol</option><option>Comidas</option></datalist>
+      <label class="field-label" for="productName">Nombre del producto</label><input id="productName" type="text" placeholder="Ej. Bandeja paisa" />
+      <label class="field-label" for="productCategory">Categoría</label><input id="productCategory" type="text" list="categoryOptions" placeholder="Ej. Platos fuertes" /><datalist id="categoryOptions"><option>Entradas</option><option>Platos fuertes</option><option>Cafetería</option><option>Bebidas</option><option>Postres</option></datalist>
       <div class="two-fields"><div><label class="field-label" for="productCost">Precio de costo</label><input id="productCost" type="number" min="0" inputmode="numeric" placeholder="$0" /></div><div><label class="field-label" for="productPrice">Precio de venta</label><input id="productPrice" type="number" min="0" inputmode="numeric" placeholder="$0" /></div></div>
       <div class="three-fields"><div><label class="field-label" for="productStock">Stock actual</label><input id="productStock" type="number" min="0" step="0.1" placeholder="0" /></div><div><label class="field-label" for="productMinStock">Stock mínimo</label><input id="productMinStock" type="number" min="0" step="0.1" placeholder="0" /></div><div><label class="field-label" for="productUnit">Unidad</label><select id="productUnit"><option value="und">Unidad</option><option value="botella">Botella</option><option value="L">Litro</option><option value="porción">Porción</option></select></div></div>
       <label class="field-label" for="productImage">Imagen del producto</label><div class="product-image-input"><div id="productImagePreview" class="product-image-preview">🍾</div><label class="outline-button file-button">Seleccionar imagen<input id="productImage" type="file" accept="image/*" hidden /></label></div>
@@ -424,7 +424,7 @@
 
     <dialog id="expenseDialog" class="small-dialog">
       <div class="dialog-header"><div><p class="eyebrow">EGRESO</p><h2>Registrar gasto</h2></div><button class="icon-button" data-close="expenseDialog" aria-label="Cerrar">×</button></div>
-      <label class="field-label" for="expenseCategory">Tipo de gasto</label><select id="expenseCategory"><option>Servicios públicos</option><option>Arriendo</option><option>Nómina</option><option>Transporte</option><option>Marketing</option><option>Mantenimiento</option><option>Personal / DJ</option><option>Insumos / caja menor</option><option>Otros gastos</option></select>
+      <label class="field-label" for="expenseCategory">Tipo de gasto</label><select id="expenseCategory"><option>Servicios públicos</option><option>Arriendo</option><option>Nómina</option><option>Transporte</option><option>Marketing</option><option>Mantenimiento</option><option>Personal</option><option>Insumos / caja menor</option><option>Otros gastos</option></select>
       <label class="field-label" for="expenseDescription">Descripción</label><input id="expenseDescription" type="text" placeholder="Ej. Pago de energía eléctrica" />
       <div class="two-fields"><div><label class="field-label" for="expenseAmount">Valor pagado</label><input id="expenseAmount" type="number" min="0" inputmode="numeric" placeholder="$0" /></div><div><label class="field-label" for="expenseMethod">Medio de pago</label><select id="expenseMethod"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option><option>Nequi</option></select></div></div>
       <label class="field-label" for="expenseDate">Fecha</label><input id="expenseDate" type="date" />
@@ -625,7 +625,7 @@
       <div class="dialog-total"><span>Nuevo total</span><strong id="invoiceNewTotal">$0</strong></div>
       <p class="muted" id="invoiceDiff"></p>
       <p class="muted">El inventario se ajusta solo con la diferencia de cantidades.</p>
-      <label class="field-label" for="invoiceReason">Motivo de la corrección (obligatorio)</label><input id="invoiceReason" type="text" placeholder="Ej. Se cobró una cerveza de más" />
+      <label class="field-label" for="invoiceReason">Motivo de la corrección (obligatorio)</label><input id="invoiceReason" type="text" placeholder="Ej. Se cobró un plato de más" />
       <button id="saveInvoiceButton" class="primary-button full">Guardar corrección</button>
     </dialog>
 
@@ -651,14 +651,14 @@
       <p class="muted">Descuenta existencias del stock con justificación contable ($0 de venta, sin alterar arqueo de caja).</p>
       <label class="field-label" for="wasteItem">Producto activo</label><select id="wasteItem"></select>
       <div class="two-fields"><div><label class="field-label" for="wasteQty">Cantidad a descontar</label><input id="wasteQty" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0" /></div><div><label class="field-label" for="wasteReason">Motivo</label><select id="wasteReason"><option value="Rotura / Merma">Rotura / Merma</option><option value="Cortesía de la casa">Cortesía de la casa</option><option value="Consumo de personal">Consumo de personal</option><option value="Otro ajuste">Otro ajuste</option></select></div></div>
-      <label class="field-label" for="wasteNote">Observación o nota (opcional)</label><input id="wasteNote" type="text" placeholder="Ej. Botella rota en barra, cortesía mesa 4..." />
+      <label class="field-label" for="wasteNote">Observación o nota (opcional)</label><input id="wasteNote" type="text" placeholder="Ej. Plato devuelto a cocina, cortesía mesa 4..." />
       <div id="wasteValueBox" class="waste-value-box"><p id="wasteValue" class="muted"></p></div>
       <button id="saveWasteButton" class="primary-button full">Guardar ajuste y descontar stock</button>
     </dialog>
 
     <dialog id="countDialog" class="small-dialog count-dialog">
       <div class="dialog-header"><div><p class="eyebrow">INVENTARIO</p><h2>Conteo físico</h2></div><button class="icon-button" data-close="countDialog" aria-label="Cerrar">×</button></div>
-      <p class="muted">Escribe lo que realmente hay en la barra y la bodega. Lo que dejes en blanco no se toca.</p>
+      <p class="muted">Escribe lo que realmente hay en la cocina y la bodega. Lo que dejes en blanco no se toca.</p>
       <div class="count-table-wrap"><table><thead><tr><th>Insumo</th><th>Sistema</th><th>Contado</th><th>Diferencia</th></tr></thead><tbody id="countBody"></tbody></table></div>
       <div class="dialog-total"><span>Diferencia valorizada</span><strong id="countTotal">$0</strong></div>
       <label class="field-label" for="countNote">Nota del conteo</label><input id="countNote" type="text" placeholder="Ej. Conteo de cierre del sábado" />

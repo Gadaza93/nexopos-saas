@@ -64,10 +64,10 @@
 
       <main class="admin-main">
         <section class="stats-grid admin-stats" aria-label="Métricas rápidas">
-          <article class="stat-card accent"><span>Total de clientes / bares</span><strong id="metricTotal">0</strong><small>Negocios registrados</small></article>
+          <article class="stat-card accent"><span>Total de clientes</span><strong id="metricTotal">0</strong><small>Negocios registrados</small></article>
           <article class="stat-card"><span><i class="admin-badge is-active">Activos</i></span><strong id="metricActive">0</strong><small>Con licencia vigente</small></article>
           <article class="stat-card"><span><i class="admin-badge is-suspended">Suspendidos</i></span><strong id="metricSuspended">0</strong><small>POS bloqueado</small></article>
-          <article class="stat-card"><span>Ventas globales procesadas</span><strong id="metricSales">0</strong><small>Ventas registradas en todos los bares</small></article>
+          <article class="stat-card"><span>Ventas globales procesadas</span><strong id="metricSales">0</strong><small>Ventas registradas en todos los negocios</small></article>
         </section>
 
         <section class="admin-table-card">
@@ -80,7 +80,7 @@
               <thead>
                 <tr>
                   <th>ID Negocio</th>
-                  <th>Nombre del Bar</th>
+                  <th>Nombre del negocio</th>
                   <th>Plan</th>
                   <th class="num">Productos</th>
                   <th class="num">Ventas</th>
@@ -104,7 +104,7 @@
       </div>
       <form id="negocioForm" class="activation-form" novalidate>
         <label class="activation-field">
-          <span>Nombre del bar</span>
+          <span>Nombre del negocio</span>
           <input id="negocioNombre" type="text" maxlength="80" placeholder="Ej: Gastrobar La Estación" autocomplete="off" required />
         </label>
         <label class="activation-field">
@@ -114,7 +114,7 @@
         </label>
         <label class="activation-field">
           <span>Correo para la terminal</span>
-          <input id="negocioEmail" type="email" inputmode="email" placeholder="laestacion@bar.com" autocomplete="off" required />
+          <input id="negocioEmail" type="email" inputmode="email" placeholder="lacasona@restaurante.com" autocomplete="off" required />
         </label>
         <label class="activation-field">
           <span>Contraseña inicial</span>

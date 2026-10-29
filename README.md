@@ -1,10 +1,10 @@
-# Brasa POS — prototipo offline para bar
+# NexoPos — POS para restaurantes y cafeterías
 
-Este es un primer prototipo para un bar de una sede en Colombia. Funciona sin una cuenta ni servidor: guarda los pedidos, pagos, inventario y cierres en el almacenamiento local del navegador.
+POS para restaurantes y cafeterías en Colombia, derivado de NexoBar. Funciona sin conexión: guarda los pedidos, pagos, inventario y cierres en el equipo, y sincroniza con la nube cuando hay internet.
 
 ## Incluye
 
-- Punto de venta por mesas, barra, salón, terraza y VIP.
+- Punto de venta por mesas, barra, salón, terraza, VIP y venta de mostrador.
 - Productos de ejemplo en pesos colombianos, con recetas básicas.
 - Creación de productos con nombre, categoría, precio de costo, precio de venta, unidad y stock inicial.
 - Edición y eliminación de productos; administración de categorías y foto para cada producto.

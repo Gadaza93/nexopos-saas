@@ -154,8 +154,8 @@ return NexoSync.pullAllFromSupabase().then(pullRes => {
 
   // Verificar que contenga productos clave solicitados
   const productNames = state.products.map(p => p.name.toLowerCase());
-  assert(productNames.some(n => n.includes('corona')), 'Debe incluir Cerveza Corona');
-  assert(productNames.some(n => n.includes('club colombia')), 'Debe incluir Cerveza Club Colombia');
+  assert(productNames.some(n => n.includes('capuchino')), 'Debe incluir Capuchino');
+  assert(productNames.some(n => n.includes('bandeja paisa')), 'Debe incluir Bandeja paisa');
   assert(productNames.some(n => n.includes('papas')), 'Debe incluir Papas');
 
   console.log('   ✅ Exactamente 14 productos de prueba presentes (incluyendo Corona, Club Colombia, Papas).');
