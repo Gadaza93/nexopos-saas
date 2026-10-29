@@ -336,6 +336,9 @@ function sanitizeProducto(p, bId) {
     stock: currentStock,
     min_stock: Number(inv.min ?? p.min_stock ?? 5),
     activo: p.active !== false && p.activo !== false,
+    // Plato preparado: sin stock propio (se descuentan sus insumos); la receta viaja con el producto
+    tipo: p.tipo === "preparado" ? "preparado" : "reventa",
+    receta: p.tipo === "preparado" && Array.isArray(p.receta) ? p.receta : null,
     created_at: toIsoDate(p.createdAt || p.created_at || Date.now()),
     updated_at: toIsoDate(p.updated_at || p.updatedAt || Date.now())
   };
@@ -384,6 +387,7 @@ function stockItemsQty(items) {
   const out = {};
   (Array.isArray(items) ? items : []).forEach(it => {
     const id = it && (it.productId || it.id), q = Number(it?.qty);
+    if (it?.tipo === "preparado") return;
     if (id && Number.isFinite(q) && q) out[String(id)] = roundQty((out[String(id)] || 0) + q);
   });
   return out;
@@ -432,6 +436,22 @@ function remoteStock(p, cloud) {
   p.stockSynced = cloud;
   return next;
 }
+// Producto de la nube: si es un plato preparado se queda sin stock propio ni artículo de inventario (si no,
+// getPOSProducts lo duplicaría). Una receta editada aquí y aún no subida no se pisa. Devuelve true si es preparado.
+function aplicarRecetaRemota(prod, row) {
+  if (!prod || !row) return false;
+  if (isPendingSync(prod)) return prod.tipo === "preparado";
+  if (row.tipo === "preparado") {
+    prod.tipo = "preparado";
+    prod.receta = Array.isArray(row.receta) ? row.receta : [];
+    if (prod.inventoryId && Array.isArray(state?.inventory)) state.inventory = state.inventory.filter(i => i.id !== prod.inventoryId);
+    delete prod.inventoryId; delete prod.stock; delete prod.stockSynced;
+    prod.recipe = {};
+    return true;
+  }
+  if (prod.tipo === "preparado") { delete prod.tipo; delete prod.receta; }
+  return false;
+}
 function stockMovementsList() {
   if (!Array.isArray(state.stockMovements)) state.stockMovements = [];
   return state.stockMovements;
@@ -442,7 +462,7 @@ function recordStockMovements() {
   list.forEach(m => queued.set(m.productId, roundQty((queued.get(m.productId) || 0) + m.delta)));
   (state.products || []).forEach(p => {
     const id = String(p.id);
-    if (!Number.isFinite(p.stockSynced) || deletedProductIds.includes(id)) return;
+    if (!Number.isFinite(p.stockSynced) || deletedProductIds.includes(id) || p.tipo === "preparado") return;
     const delta = roundQty(localStock(p) - p.stockSynced + (sold.get(id) || 0) - (queued.get(id) || 0));
     if (delta) list.push({ id: `mov-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`, productId: id, delta, motivo: "ajuste", at: Date.now() });
   });
@@ -471,6 +491,137 @@ async function syncStockMovements(sb, bId) {
   } finally {
     stockUploads--;
   }
+}
+
+/* ---------- Insumos (tablas insumos y movimientos_insumos) ----------
+   Mismo principio que el stock de productos, pero sin trigger de ventas: cada insumo guarda qtySynced (lo que la nube
+   ya conoce) y TODO lo hecho en esta caja (ventas, compras, mermas, ajustes, conteo) sube como la diferencia
+   qty − qtySynced − movimientos en cola; el trigger movimientos_insumos_aplicar la suma al stock. Así ninguna ruta que
+   cambie un insumo necesita avisar a la nube, y dos cajas que venden a la vez no se pisan. El catálogo (nombre, unidad,
+   mínimo, costo) sube cuando el insumo está pendiente, sin la columna stock; solo un insumo nuevo sube su stock absoluto,
+   una vez. Borrar un insumo lo deja inactivo en la nube. Prueba: scratch/test-sync-insumos.js */
+let insumosMode = null;   // true: hay tablas de insumos · false: proyecto sin la migración · null: sin decidir
+let insumoUploads = 0;    // subidas en curso: mientras tanto el stock remoto no se aplica
+async function usaTablaInsumos(sb) {
+  if (insumosMode !== null || !sb) return insumosMode === true;
+  try {
+    const { error } = await sb.from("insumos").select("id").limit(1);
+    if (!error) insumosMode = true;
+    else if (/insumos|relation|does not exist|schema cache/i.test(error.message || "")) insumosMode = false;
+  } catch (e) {
+    insumosMode = false;
+  }
+  return insumosMode === true;
+}
+const insumosLocales = () => ((typeof state !== "undefined" && Array.isArray(state?.insumos)) ? state.insumos : []);
+const insumoLocal = id => insumosLocales().find(i => String(i.id) === String(id));
+function insumoMovementsList() {
+  if (!Array.isArray(state.insumoMovements)) state.insumoMovements = [];
+  return state.insumoMovements;
+}
+function recordInsumoMovements() {
+  const queued = new Map(), list = insumoMovementsList();
+  list.forEach(m => queued.set(m.insumoId, roundQty((queued.get(m.insumoId) || 0) + m.delta)));
+  insumosLocales().forEach(i => {
+    if (!Number.isFinite(i.qtySynced)) return;
+    const delta = roundQty((Number(i.qty) || 0) - i.qtySynced - (queued.get(i.id) || 0));
+    if (delta) list.push({ id: `movins-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`, insumoId: String(i.id), delta, motivo: "ajuste", at: Date.now() });
+  });
+}
+function sanitizeInsumo(i, bId) {
+  return {
+    id: String(i.id),
+    business_id: String(bId || DEFAULT_BUSINESS_ID),
+    nombre: i.name || "Insumo",
+    unidad: i.unit || "und",
+    min_stock: Number(i.min) || 0,
+    costo: Number(i.cost) || 0,
+    costo_ultimo: Number.isFinite(Number(i.lastCost)) && i.lastCost != null ? Number(i.lastCost) : null,
+    activo: true,
+    created_at: toIsoDate(i.createdAt || Date.now()),
+    updated_at: toIsoDate(i.updatedAt || Date.now())
+  };
+}
+async function syncInsumos(sb, bId) {
+  if (isDemoMode() || typeof state === "undefined" || !state || !(await usaTablaInsumos(sb))) return { ok: true, count: 0 };
+  insumoUploads++;
+  try {
+    // 1. Borrados: quedan inactivos (los movimientos de la nube los siguen nombrando)
+    const borrados = [...(state.deletedInsumoIds || [])];
+    if (borrados.length) {
+      const { error } = await sb.from("insumos").update({ activo: false, updated_at: new Date().toISOString() }).in("id", borrados).eq("business_id", bId);
+      if (error) return { ok: false, error: error.message };
+      state.deletedInsumoIds = (state.deletedInsumoIds || []).filter(id => !borrados.includes(id));
+    }
+    // 2. Nuevos: una sola vez con su stock absoluto (si ya existía por una respuesta perdida, no se toca)
+    const nuevos = insumosLocales().filter(i => !Number.isFinite(i.qtySynced));
+    if (nuevos.length) {
+      const rows = nuevos.map(i => ({ ...sanitizeInsumo(i, bId), stock: roundQty(Number(i.qty) || 0) }));
+      const { error } = await sb.from("insumos").upsert(rows, { onConflict: "id", ignoreDuplicates: true });
+      if (error) { console.warn("[NexoSync] ⚠️ Insumos nuevos:", error.message); return { ok: false, error: error.message }; }
+      nuevos.forEach((i, idx) => { i.qtySynced = rows[idx].stock; i.sync_status = "synced"; });
+    }
+    // 3. Catálogo editado (sin stock: lo cambian los movimientos)
+    const editados = insumosLocales().filter(i => Number.isFinite(i.qtySynced) && isPendingSync(i));
+    if (editados.length) {
+      const { error } = await sb.from("insumos").upsert(editados.map(i => sanitizeInsumo(i, bId)), { onConflict: "id" });
+      if (error) { console.warn("[NexoSync] ⚠️ Insumos:", error.message); return { ok: false, error: error.message }; }
+      editados.forEach(i => { i.sync_status = "synced"; });
+    }
+    // 4. Movimientos: el id es la llave, un reintento no suma dos veces
+    recordInsumoMovements();
+    const pending = [...insumoMovementsList()];
+    if (pending.length) {
+      const rows = pending.map(m => ({ id: m.id, business_id: String(bId), insumo_id: m.insumoId, delta: m.delta, motivo: m.motivo || "ajuste", created_at: toIsoDate(m.at) }));
+      const { error } = await sb.from("movimientos_insumos").upsert(rows, { onConflict: "id", ignoreDuplicates: true });
+      if (error) { console.warn("[NexoSync] ⚠️ Movimientos de insumos:", error.message); return { ok: false, error: error.message }; }
+      pending.forEach(m => { const i = insumoLocal(m.insumoId); if (i && Number.isFinite(i.qtySynced)) i.qtySynced = roundQty(i.qtySynced + m.delta); });
+      state.insumoMovements = insumoMovementsList().filter(m => !pending.includes(m));
+    }
+    const count = borrados.length + nuevos.length + editados.length + pending.length;
+    if (count) {
+      if (typeof scheduleSave === "function") scheduleSave();
+      console.log(`[NexoSync] ✅ Insumos: ${count} cambios subidos.`);
+    }
+    return { ok: true, count };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    insumoUploads--;
+  }
+}
+// Insumo que llega de la nube (descarga o tiempo real). Inactivo = borrado. El stock local se mueve lo mismo que cambió
+// la nube (conserva lo hecho aquí y aún no subido); el catálogo editado aquí y sin subir no se pisa.
+function aplicarInsumoRemoto(row) {
+  if (!row?.id || typeof state === "undefined" || !state) return;
+  if (!Array.isArray(state.insumos)) state.insumos = [];
+  const id = String(row.id), local = insumoLocal(id), cloud = Number(row.stock) || 0;
+  if (row.activo === false) {
+    if (local) state.insumos = state.insumos.filter(i => i !== local);
+    return;
+  }
+  if ((state.deletedInsumoIds || []).includes(id)) return; // borrado aquí y aún no subido
+  if (!local) {
+    state.insumos.push({ id, name: row.nombre || "Insumo", unit: row.unidad || "und", qty: cloud, min: Number(row.min_stock) || 0, cost: Number(row.costo) || 0, ...(row.costo_ultimo != null ? { lastCost: Number(row.costo_ultimo) } : {}), qtySynced: cloud, createdAt: new Date(row.created_at || Date.now()).getTime(), updatedAt: new Date(row.updated_at || Date.now()).getTime(), sync_status: "synced" });
+    return;
+  }
+  if (!isPendingSync(local)) Object.assign(local, { name: row.nombre || local.name, unit: row.unidad || local.unit, min: Number(row.min_stock) || 0, cost: Number(row.costo) || 0, ...(row.costo_ultimo != null ? { lastCost: Number(row.costo_ultimo) } : {}), sync_status: "synced" });
+  if (insumoUploads > 0) return; // la nube podría traer ya aplicada la subida en curso: la próxima descarga lo corrige
+  if (Number.isFinite(local.qtySynced)) local.qty = roundQty((Number(local.qty) || 0) + cloud - local.qtySynced);
+  else local.qty = cloud;
+  local.qtySynced = cloud;
+}
+async function pullInsumos(sb, bId) {
+  if (isDemoMode() || !(await usaTablaInsumos(sb))) return 0;
+  const { rows, complete, error } = await fetchAllRows(sb, "insumos", bId);
+  if (error) console.warn("[NexoSync] Error descargando insumos:", error.message);
+  if (!complete) return 0; // incompleto: no se borra nada local
+  const remotos = new Set(rows.map(r => String(r.id)));
+  // Ya no están en la nube: se quitan los que esta caja ya había subido (los nuevos sin subir se conservan)
+  state.insumos = insumosLocales().filter(i => !Number.isFinite(i.qtySynced) || remotos.has(String(i.id)));
+  rows.forEach(aplicarInsumoRemoto);
+  if (typeof refreshPreparedCosts === "function") refreshPreparedCosts();
+  return rows.length;
 }
 
 function sanitizeVenta(p, bId) {
@@ -617,6 +768,10 @@ function countPendingRecords() {
     if (Array.isArray(state.stockMovements)) {
       count += state.stockMovements.length;
     }
+    if (Array.isArray(state.insumos)) {
+      count += state.insumos.filter(isPendingSync).length; // un insumo nuevo nace pendiente
+    }
+    count += (state.insumoMovements || []).length + (state.deletedInsumoIds || []).length;
     if (Array.isArray(state.orders)) {
       count += state.orders.filter(isPendingSync).length;
     }
@@ -1661,6 +1816,9 @@ async function syncAll(options = {}) {
   // --- 3b. MOVIMIENTOS DE STOCK (compras, mermas, ajustes, conteos…: la diferencia que la nube aún no tiene) ---
   results.stock = await syncStockMovements(sb, bId);
 
+  // --- INSUMOS (catálogo, borrados y movimientos) ---
+  results.insumos = await syncInsumos(sb, bId);
+
   // --- 4. GASTOS / COMPRAS ---
   try {
     const expensesList = (typeof state !== "undefined" && Array.isArray(state.expenses)) ? state.expenses : [];
@@ -1995,6 +2153,11 @@ async function pullAllFromSupabase(businessId) {
               });
             }
 
+            if (aplicarRecetaRemota(existingProd || state.products.find(x => x.id === String(p.id)), p)) {
+              if (p.categoria && !state.categories.includes(p.categoria)) state.categories.push(p.categoria);
+              return;
+            }
+
             // Sincronizar insumo de inventario local correspondiente
             let invItem = state.inventory.find(i => i.id === (existingProd?.inventoryId || invId)) || state.inventory.find(i => i.id === invId);
             if (invItem) {
@@ -2020,6 +2183,13 @@ async function pullAllFromSupabase(businessId) {
       }
     } catch (e) {
       console.warn("[NexoSync] Error descargando productos:", e.message);
+    }
+
+    // 2b. Insumos (catálogo y stock)
+    try {
+      results.insumos = await pullInsumos(sb, bId);
+    } catch (e) {
+      console.warn("[NexoSync] Error descargando insumos:", e.message);
     }
 
     // 3. Ventas
@@ -2294,6 +2464,13 @@ function setupRealtime() {
           }
         }
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "insumos", filter: `business_id=eq.${bId}` }, payload => {
+        if (!payload?.new?.id) return;
+        aplicarInsumoRemoto(payload.new);
+        if (typeof refreshPreparedCosts === "function") refreshPreparedCosts();
+        if (typeof scheduleSave === "function") scheduleSave();
+        if (typeof renderAll === "function") renderAll();
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "productos", filter: `business_id=eq.${bId}` }, payload => {
         if (payload?.new) {
           const p = payload.new;
@@ -2333,7 +2510,8 @@ function setupRealtime() {
               });
             }
 
-            if (Array.isArray(state.inventory)) {
+            const preparado = aplicarRecetaRemota(existing || state.products.find(x => x.id === String(p.id)), p);
+            if (!preparado && Array.isArray(state.inventory)) {
               let invItem = state.inventory.find(i => i.id === (existing?.inventoryId || invId)) || state.inventory.find(i => i.id === invId);
               if (invItem) {
                 invItem.name = p.nombre || invItem.name;
@@ -2695,6 +2873,10 @@ rootScope.NexoSync = {
   addSaleStockDelta,
   syncStockMovements,
   remoteStock,
+  syncInsumos,
+  pullInsumos,
+  aplicarInsumoRemoto,
+  aplicarRecetaRemota,
   SUPABASE_URL,
   SUPABASE_KEY: SUPABASE_ANON_KEY,
   SUPABASE_ANON_KEY

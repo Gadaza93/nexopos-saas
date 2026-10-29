@@ -13,6 +13,8 @@
 //   leer o escribir una columna inexistente de pedidos_activos devuelve el error de PostgREST.
 //   stockMovimientos: true simula supabase/sql/2026-10-28_stock_por_movimientos.sql (tabla movimientos_stock y los
 //   triggers ventas_stock y movimientos_stock_aplicar). Sin ella la tabla no existe, como antes de aplicar el SQL.
+//   insumos: true simula supabase/migrations/20261029170000_insumos_y_recetas.sql (tablas insumos y movimientos_insumos,
+//   trigger movimientos_insumos_aplicar, sin permiso para cambiar el stock de un insumo existente ni para borrarlo).
 //   global.supabase = { createClient: () => sb };
 
 const clone = value => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
@@ -30,13 +32,14 @@ function cantidadesVenta(items) {
   const out = {};
   (Array.isArray(items) ? items : []).forEach(it => {
     const id = it && (it.productId ?? it.id);
+    if (it?.tipo === 'preparado') return; // sin stock propio (como ventas_cantidades)
     const q = typeof it?.qty === 'number' ? it.qty : /^-?[0-9]+(\.[0-9]+)?$/.test(String(it?.qty)) ? Number(it.qty) : 0;
     if (id != null) out[id] = (out[id] || 0) + q;
   });
   return out;
 }
 
-function createMockSupabase({ businessId = 'nexopos_default', authenticated = true, seed = {}, rpc = {}, pedidosConMeta = false, stockMovimientos = false } = {}) {
+function createMockSupabase({ businessId = 'nexopos_default', authenticated = true, seed = {}, rpc = {}, pedidosConMeta = false, stockMovimientos = false, insumos = false } = {}) {
   const tables = {};
   const esquema = { pedidos_activos: pedidosConMeta ? [...PEDIDOS_COLS, 'meta'] : PEDIDOS_COLS };
   const columnaInexistente = (table, cols) => (esquema[table] ? cols.find(c => !esquema[table].includes(c)) : null);
@@ -67,6 +70,11 @@ function createMockSupabase({ businessId = 'nexopos_default', authenticated = tr
     });
   }
 
+  function aplicarMovimientoInsumo(mov) { // movimientos_insumos_aplicar
+    const i = tableRows('insumos').find(r => String(r.id) === String(mov.insumo_id) && String(r.business_id) === String(mov.business_id));
+    if (i) i.stock = Math.round((Number(i.stock || 0) + Number(mov.delta)) * 1000) / 1000;
+  }
+
   function query(table) {
     const state = { action: 'select', filters: [], order: null, limit: null, single: null, head: false, count: null, returning: false, payload: null, onConflict: 'id', ignoreDuplicates: false, columns: '*' };
     const matches = row => state.filters.every(([op, col, val]) => {
@@ -89,6 +97,10 @@ function createMockSupabase({ businessId = 'nexopos_default', authenticated = tr
       if (!bId) return { data: null, error: denied(table), count: null };
       if (table === 'movimientos_stock' && !stockMovimientos) return { data: null, error: { code: '42P01', message: 'relation "public.movimientos_stock" does not exist' }, count: null };
       if (table === 'movimientos_stock' && (state.action === 'update' || state.action === 'delete')) return { data: null, error: denied(table), count: null };
+      if ((table === 'insumos' || table === 'movimientos_insumos') && !insumos) return { data: null, error: { code: '42P01', message: `relation "public.${table}" does not exist` }, count: null };
+      if (table === 'movimientos_insumos' && (state.action === 'update' || state.action === 'delete')) return { data: null, error: denied(table), count: null };
+      if (table === 'insumos' && state.action === 'delete') return { data: null, error: denied(table), count: null };
+      if (table === 'insumos' && state.action === 'update' && 'stock' in (state.payload || {})) return { data: null, error: denied(table), count: null };
       const col = scopeColumn(table), rows = tableRows(table);
       const visible = rows.filter(row => String(row[col]) === String(bId));
 
@@ -104,13 +116,16 @@ function createMockSupabase({ businessId = 'nexopos_default', authenticated = tr
           const existing = state.action === 'upsert' ? rows.find(row => String(row[key]) === String(record[key])) : null;
           if (existing && String(existing[col]) !== String(bId)) return null; // fila de otro negocio: invisible
           if (existing && state.ignoreDuplicates) return existing; // on conflict do nothing: el trigger no se repite
+          if (existing && table === 'insumos' && 'stock' in record) return 'sin-permiso'; // el stock solo lo cambian los movimientos
           const anteriores = existing ? clone(existing.items) : undefined;
           let row;
           if (existing) { Object.assign(existing, clone(record)); row = existing; } else { row = clone(record); rows.push(row); }
           if (stockMovimientos && table === 'ventas' && (!existing || 'items' in record)) ventasStock(row, existing ? anteriores || [] : undefined);
           if (stockMovimientos && table === 'movimientos_stock' && !existing) aplicarMovimiento(row);
+          if (insumos && table === 'movimientos_insumos' && !existing) aplicarMovimientoInsumo(row);
           return row;
         });
+        if (written.includes('sin-permiso')) return { data: null, error: denied(table), count: null };
         if (written.includes(null)) return { data: null, error: rlsViolation(table), count: null };
         return { data: state.returning ? clone(written) : null, error: null, count: null };
       }

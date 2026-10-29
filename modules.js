@@ -545,7 +545,7 @@ function savePurchase() {
       const unitCost = line.total / qty;
       ins.cost = Math.round((before > 0 && costBefore > 0 ? (before * costBefore + line.total) / (before + qty) : unitCost) * 100) / 100;
       ins.lastCost = Math.round(unitCost * 100) / 100;
-      ins.qty = roundInsumoQty((Number(ins.qty) || 0) + qty); ins.updatedAt = Date.now();
+      ins.qty = roundInsumoQty((Number(ins.qty) || 0) + qty); ins.updatedAt = Date.now(); ins.sync_status = 'pending'; // costo nuevo
       line.avgCostAfter = ins.cost;
       return;
     }
@@ -621,7 +621,7 @@ function consumeRecipe(source, soldQty) {
   recipeLines(source).forEach(line => { const ins = insumoById(line.insumoId); if (!ins) return; ins.qty = roundInsumoQty((Number(ins.qty) || 0) - recipeLineUse(line, ins) * soldQty); ins.updatedAt = Date.now(); });
 }
 // El costo de un preparado sigue al de sus insumos (cambia con cada compra)
-function refreshPreparedCosts() { (state.products || []).filter(isPrepared).forEach(p => { const cost = recipeCost(p); if (cost !== Number(p.cost)) { p.cost = cost; p.sync_status = 'pending'; } }); }
+function refreshPreparedCosts() { (state.products || []).filter(isPrepared).forEach(p => { const cost = recipeCost(p); if (cost !== Number(p.cost)) { p.cost = cost; p.sync_status = 'pending'; p.updated_at = new Date().toISOString(); } }); }
 function insumoStatus(ins) { return ins.qty <= 0 ? ['status-out', 'Agotado'] : ins.qty <= ins.min ? ['status-low', 'Bajo stock'] : ['status-good', 'Disponible']; }
 function insumoUsage(id) { return (state.products || []).filter(p => isPrepared(p) && recipeLines(p).some(l => l.insumoId === id)); }
 
@@ -652,9 +652,9 @@ function saveInsumo() {
   if (ins) {
     // Cambio de unidad (misma magnitud): el stock se convierte; mínimo y costo se escriben ya en la unidad nueva
     if (unit !== ins.unit) ins.qty = roundInsumoQty(convertUnits(ins.qty, ins.unit, unit));
-    Object.assign(ins, { name, unit, min, cost, updatedAt: Date.now() });
+    Object.assign(ins, { name, unit, min, cost, updatedAt: Date.now(), sync_status: 'pending' });
   } else {
-    ins = { id: uid('ins'), name, unit, qty, min, cost, createdAt: Date.now() };
+    ins = { id: uid('ins'), name, unit, qty, min, cost, createdAt: Date.now(), updatedAt: Date.now(), sync_status: 'pending' };
     state.insumos = [...(state.insumos || []), ins];
     if (qty) logStock({ type: 'ajuste', reasonCategory: 'Stock inicial', itemId: ins.id, itemName: name, unit, delta: qty, cost, value: qty * cost, reason: 'Stock inicial' });
   }
@@ -667,6 +667,7 @@ function deleteInsumo(id = editingInsumoId) {
   if (used.length) return showToast(`${ins.name} está en la receta de ${used.map(p => p.name).slice(0, 3).join(', ')}${used.length > 3 ? '…' : ''}. Quítalo de esas recetas primero.`);
   if (!window.confirm(`¿Eliminar el insumo ${ins.name}?`)) return;
   state.insumos = state.insumos.filter(i => i.id !== id);
+  if (Number.isFinite(ins.qtySynced)) state.deletedInsumoIds = [...new Set([...(state.deletedInsumoIds || []), id])]; // la nube lo marca inactivo
   logAudit('Insumo eliminado', `${ins.name} · ${formatQty(ins.qty)} ${ins.unit}`);
   saveState(); document.querySelector('#insumoDialog')?.close(); renderAll(); showToast('Insumo eliminado.');
 }
@@ -942,8 +943,10 @@ const KITCHEN_STATION_OPTIONS = { ...KITCHEN_STATIONS, ninguna: 'No se envía' }
 function kitchenNorm(text) { return String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 // Sin configurar: bebidas y cafetería a Barra, el resto a Cocina
 function defaultKitchenStation(category) { return /bebida|cafe|jugo|gaseosa|refresco|limonada|batido|malteada|licor|cerveza|coctel|vino|aromatica|\bte\b/.test(kitchenNorm(category)) ? 'barra' : 'cocina'; }
-function kitchenStationFor(category) { const saved = state.kitchenStations?.[category]; return KITCHEN_STATION_OPTIONS[saved] ? saved : defaultKitchenStation(category); }
-function setKitchenStation(category, station) { if (!KITCHEN_STATION_OPTIONS[station]) return; state.kitchenStations = { ...(state.kitchenStations || {}), [category]: station }; saveState(); }
+function kitchenStationsMap() { return state.profile?.kitchenStations || state.kitchenStations || {}; }
+function kitchenStationFor(category) { const saved = kitchenStationsMap()[category]; return KITCHEN_STATION_OPTIONS[saved] ? saved : defaultKitchenStation(category); }
+// Las estaciones son del negocio: van en el perfil, que sube a negocios.configuracion (las impresoras sí son de cada equipo)
+function setKitchenStation(category, station) { if (!KITCHEN_STATION_OPTIONS[station]) return; state.profile = { ...state.profile, kitchenStations: { ...kitchenStationsMap(), [category]: station }, sync_status: 'pending' }; saveState(); if (globalThis.NexoSync?.scheduleSync) globalThis.NexoSync.scheduleSync(); }
 function itemSentQty(item) { return Math.min(Math.max(0, Number(item.sentQty) || 0), Math.max(0, Number(item.qty) || 0)); }
 function itemUnsentQty(item) { return Math.max(0, (Number(item.qty) || 0) - itemSentQty(item)); }
 function itemGoesToKitchen(item) { return kitchenStationFor(itemCategory(item)) !== 'ninguna'; }
