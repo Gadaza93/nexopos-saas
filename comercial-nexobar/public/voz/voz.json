@@ -1,0 +1,53 @@
+{
+  "generado": "2026-10-28T19:57:41.348Z",
+  "tramos": [
+    {
+      "id": "caos",
+      "archivo": "voz/caos.mp3",
+      "frame": 12,
+      "inicio": 0.4,
+      "duracion": 5.459592,
+      "tempo": null,
+      "texto": "¿Se cayó el internet en plena hora pico? Mesas esperando… y pedidos perdidos.",
+      "modelo": "gemini-3.8-flash-tts",
+      "voz": "Puck",
+      "estilo": "[excited]"
+    },
+    {
+      "id": "fortalezas",
+      "archivo": "voz/fortalezas.mp3",
+      "frame": 255,
+      "inicio": 8.5,
+      "duracion": 8.594286,
+      "tempo": null,
+      "texto": "Con NexoBar, tu bar sigue vendiendo. Funciona cien por ciento sin internet, ves tus mesas en tiempo real y las comandas llegan a la barra sin retrasos.",
+      "modelo": "gemini-3.8-flash-tts",
+      "voz": "Puck",
+      "estilo": "[excited]"
+    },
+    {
+      "id": "interfaz",
+      "archivo": "voz/interfaz.mp3",
+      "frame": 549,
+      "inicio": 18.3,
+      "duracion": 6.373878,
+      "tempo": null,
+      "texto": "Cobra en segundos, cuadra la caja al peso y, cuando vuelve la red, todo se sincroniza solo.",
+      "modelo": "gemini-3.8-flash-tts",
+      "voz": "Puck",
+      "estilo": "[excited]"
+    },
+    {
+      "id": "cierre",
+      "archivo": "voz/cierre.mp3",
+      "frame": 759,
+      "inicio": 25.3,
+      "duracion": 4.414694,
+      "tempo": 1.167,
+      "texto": "NexoBar. Tu bar no se detiene, ¡tu sistema tampoco! ¡Prueba la demo!",
+      "modelo": "gemini-2.5-flash-preview-tts",
+      "voz": "Puck",
+      "estilo": "Dilo con mucho entusiasmo, como locutor de comercial de radio:"
+    }
+  ]
+}

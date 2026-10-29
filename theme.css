@@ -1,0 +1,127 @@
+/* NexoPos · Tema visual
+   Modo Noche (grafito oscuro) por defecto; Modo Día con html[data-theme="light"].
+   Barra lateral fija en grafito oscuro (#12141A / #16181F) en ambos modos. */
+:root {
+  color-scheme: dark;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, -apple-system, Roboto, sans-serif;
+  --font-display: Bahnschrift, "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+
+  /* NexoPos Dark Mode - Grafito oscuro */
+  --bg: #181A20;
+  --surface: #20232B;
+  --surface-2: #282C37;
+  --surface-3: #323745;
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.12);
+
+  --text: #F3F4F6;
+  --text-2: #D1D5DB;
+  --muted: #9CA3AF;
+  --faint: #6B7280;
+
+  /* NexoPos Orange Primario / Acentos */
+  --accent: #FF8C32;
+  --accent-strong: #E6731B;
+  --accent-mid: #FF8C32;
+  --accent-bright: #FFA459;
+  --accent-soft: rgba(255, 140, 50, 0.14);
+  --accent-line: rgba(255, 140, 50, 0.35);
+  --accent-ink: #FF8C32;
+  --on-accent: #FFFFFF;
+  --orange: #FF8C32;
+
+  /* Indicadores de estado de mesas y turnos */
+  --success: #10B981;               /* Verde menta: Caja abierta, Disponible, métricas positivas */
+  --success-soft: rgba(16, 185, 129, 0.15);
+  --warn: #F59E0B;                  /* Naranja / Ámbar: Cuenta abierta */
+  --warn-ink: #F59E0B;
+  --warn-soft: rgba(245, 158, 11, 0.15);
+  --danger: #EF4444;                /* Coral / Rojo suave: Con pedido, alertas de stock */
+  --danger-soft: rgba(239, 68, 68, 0.15);
+  --info: #3B82F6;
+
+  /* Barra lateral (Sidebar): Grafito oscuro permanente en Modo Noche y Modo Día */
+  --ink: #12141A;
+  --ink-2: #16181F;
+  --ink-3: #20232B;
+  --ink-line: rgba(255, 255, 255, 0.06);
+  --ink-warm: #16181F;
+  --on-ink: #FFFFFF;
+  --on-ink-2: #9CA3AF;             /* Iconos y textos inactivos */
+  --avatar-bg: #20232B;
+
+  --shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  /* Plano de mesas: piso, mesas vistas desde arriba, sillas/taburetes y cubierta de la barra */
+  --floor-bg: #1D2027;
+  --floor-edge: rgba(255, 255, 255, 0.06);
+  --floor-inset: inset 0 1px 18px rgba(0, 0, 0, 0.45);
+  --floor-table: #2C303B;
+  --floor-chair: #4A5163;
+  --floor-bar-top: #6B4A2E;          /* madera oscura */
+  --floor-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  --floor-shadow-lift: 0 10px 22px rgba(0, 0, 0, 0.55);
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  font-family: var(--font-ui);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+
+  /* NexoPos Light Mode - Área de contenido claro y tarjetas en blanco */
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-2: #F1F5F9;
+  --surface-3: #E2E8F0;
+  --line: #E2E8F0;
+  --line-strong: #CBD5E1;
+
+  --text: #0F172A;
+  --text-2: #334155;
+  --muted: #64748B;
+  --faint: #94A3B8;
+
+  /* NexoPos Orange Primario / Acentos se mantiene */
+  --accent: #FF8C32;
+  --accent-strong: #E6731B;
+  --accent-mid: #FF8C32;
+  --accent-bright: #FFA459;
+  --accent-soft: rgba(255, 140, 50, 0.12);
+  --accent-line: rgba(255, 140, 50, 0.35);
+  --accent-ink: #E6731B;
+  --on-accent: #FFFFFF;
+  --orange: #FF8C32;
+
+  /* Indicadores de estado */
+  --success: #10B981;
+  --success-soft: #ECFDF5;
+  --warn: #F59E0B;
+  --warn-ink: #D97706;
+  --warn-soft: #FFFBEB;
+  --danger: #EF4444;
+  --danger-soft: #FEF2F2;
+  --info: #2563EB;
+
+  /* Barra lateral (Sidebar): Se mantiene grafito oscuro permanente (#12141A / #16181F) */
+  --ink: #12141A;
+  --ink-2: #16181F;
+  --ink-3: #20232B;
+  --ink-line: rgba(255, 255, 255, 0.06);
+  --ink-warm: #16181F;
+  --on-ink: #FFFFFF;
+  --on-ink-2: #9CA3AF;
+  --avatar-bg: #20232B;
+
+  --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --floor-bg: #F4F1EC;               /* piso claro cálido */
+  --floor-edge: #E5E0D8;
+  --floor-inset: inset 0 1px 16px rgba(15, 23, 42, 0.07);
+  --floor-table: #FFFFFF;
+  --floor-chair: #CBD5E1;
+  --floor-bar-top: #7A5534;
+  --floor-shadow: 0 3px 10px rgba(15, 23, 42, 0.10);
+  --floor-shadow-lift: 0 10px 22px rgba(15, 23, 42, 0.16);
+}

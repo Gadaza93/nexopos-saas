@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- CSP: solo scripts propios (+ hash del script del tema), red solo hacia Supabase, imágenes locales/data:. Si cambia el script del tema, recalcular su hash. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-432IbPWBRs/a7hIDcQe8RwD0W7C2gCqATckDfW27Afg='; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#12141A" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="NexoPos SaaS · Panel SuperAdmin para gestionar negocios y licencias." />
+    <script>try{var t=localStorage.getItem("nexopos-theme")||localStorage.getItem("brasa-theme");if(t==="light")document.documentElement.dataset.theme="light";}catch(e){}</script>
+    <script src="./supabase.min.js"></script>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="design.css" />
+    <link rel="stylesheet" href="admin.css" />
+    <title>NexoPos · Panel SuperAdmin</title>
+  </head>
+  <body class="admin-body">
+    <!-- Mientras se revisa la sesión guardada -->
+    <p id="adminBooting" class="admin-booting muted">Cargando panel…</p>
+
+    <!-- Vista de login exclusiva para SuperAdmin -->
+    <section id="adminLogin" class="admin-login" hidden>
+      <div class="admin-login-card">
+        <div class="login-brand activation-brand">
+          <span class="brand-mark"><img src="logo.png" alt="NexoPos" /></span>
+          <p class="eyebrow">NexoPos SaaS</p>
+          <h2>Acceso SuperAdmin</h2>
+          <p class="muted">Panel exclusivo para administrar negocios y licencias.</p>
+        </div>
+        <form id="adminLoginForm" class="activation-form" novalidate>
+          <label class="activation-field">
+            <span>Correo electrónico</span>
+            <input id="adminEmail" type="email" autocomplete="username" inputmode="email" placeholder="admin@nexopos.co" required />
+          </label>
+          <label class="activation-field">
+            <span>Contraseña</span>
+            <input id="adminPassword" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          </label>
+          <p id="adminLoginError" class="login-error activation-message" role="alert"></p>
+          <button id="adminLoginSubmit" type="submit" class="primary-button activation-primary">Ingresar al panel</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Tablero de Control -->
+    <div id="adminApp" class="admin-app" hidden>
+      <header class="admin-header">
+        <div class="admin-header-brand">
+          <span class="brand-mark"><img src="logo.png" alt="NexoPos" /></span>
+          <div>
+            <p class="eyebrow">NexoPos SaaS</p>
+            <h1>Panel SuperAdmin SaaS</h1>
+          </div>
+        </div>
+        <div class="admin-header-actions">
+          <span id="adminWho" class="admin-who muted"></span>
+          <button id="adminNewNegocio" type="button" class="primary-button">+ Nuevo Negocio</button>
+          <button id="adminRefresh" type="button" class="outline-button">Actualizar</button>
+          <button id="adminLogout" type="button" class="outline-button">Cerrar sesión</button>
+        </div>
+      </header>
+
+      <main class="admin-main">
+        <section class="stats-grid admin-stats" aria-label="Métricas rápidas">
+          <article class="stat-card accent"><span>Total de clientes / bares</span><strong id="metricTotal">0</strong><small>Negocios registrados</small></article>
+          <article class="stat-card"><span><i class="admin-badge is-active">Activos</i></span><strong id="metricActive">0</strong><small>Con licencia vigente</small></article>
+          <article class="stat-card"><span><i class="admin-badge is-suspended">Suspendidos</i></span><strong id="metricSuspended">0</strong><small>POS bloqueado</small></article>
+          <article class="stat-card"><span>Ventas globales procesadas</span><strong id="metricSales">0</strong><small>Ventas registradas en todos los bares</small></article>
+        </section>
+
+        <section class="admin-table-card">
+          <div class="admin-table-head">
+            <h2>Negocios y licencias</h2>
+            <p id="adminLastUpdate" class="muted"></p>
+          </div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>ID Negocio</th>
+                  <th>Nombre del Bar</th>
+                  <th>Plan</th>
+                  <th class="num">Productos</th>
+                  <th class="num">Ventas</th>
+                  <th>Fecha de vencimiento</th>
+                  <th>Estado</th>
+                  <th class="actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="negociosBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Alta rápida de un negocio (RPC admin_create_negocio) -->
+    <dialog id="negocioDialog" class="small-dialog admin-dialog" aria-labelledby="negocioDialogTitle">
+      <div class="dialog-header">
+        <div><p class="eyebrow">Alta de cliente</p><h2 id="negocioDialogTitle">Nuevo negocio</h2></div>
+        <button type="button" class="icon-button" data-close-negocio aria-label="Cerrar">×</button>
+      </div>
+      <form id="negocioForm" class="activation-form" novalidate>
+        <label class="activation-field">
+          <span>Nombre del bar</span>
+          <input id="negocioNombre" type="text" maxlength="80" placeholder="Ej: Gastrobar La Estación" autocomplete="off" required />
+        </label>
+        <label class="activation-field">
+          <span>ID de negocio</span>
+          <input id="negocioId" type="text" maxlength="40" placeholder="bar_la_estacion" autocomplete="off" spellcheck="false" required />
+          <small class="admin-hint">Se sugiere a partir del nombre. Solo minúsculas, números y guion bajo; no se puede cambiar después.</small>
+        </label>
+        <label class="activation-field">
+          <span>Correo para la terminal</span>
+          <input id="negocioEmail" type="email" inputmode="email" placeholder="laestacion@bar.com" autocomplete="off" required />
+        </label>
+        <label class="activation-field">
+          <span>Contraseña inicial</span>
+          <span class="admin-input-row">
+            <input id="negocioPassword" type="text" minlength="8" placeholder="Mínimo 8 caracteres" autocomplete="new-password" spellcheck="false" required />
+            <button id="negocioGeneratePassword" type="button" class="outline-button admin-small" title="Generar una contraseña segura de 8 caracteres">🎲 Generar</button>
+          </span>
+        </label>
+        <div class="admin-two-fields">
+          <label class="activation-field">
+            <span>Plan</span>
+            <select id="negocioPlan"><option value="pro">PRO</option><option value="basico">BÁSICO</option></select>
+          </label>
+          <label class="activation-field">
+            <span>Días de vigencia inicial</span>
+            <input id="negocioDias" type="number" min="1" max="3650" step="1" value="30" inputmode="numeric" required />
+          </label>
+        </div>
+        <p id="negocioFormError" class="login-error activation-message" role="alert"></p>
+        <div class="admin-dialog-actions">
+          <button type="button" class="outline-button" data-close-negocio>Cancelar</button>
+          <button id="negocioSubmit" type="submit" class="primary-button">Crear y Activar Negocio</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Confirmación con las credenciales para enviar al cliente -->
+    <dialog id="negocioCreatedDialog" class="small-dialog admin-dialog" aria-labelledby="negocioCreatedTitle">
+      <div class="dialog-header">
+        <div><p class="eyebrow">Negocio creado</p><h2 id="negocioCreatedTitle">Listo para vincular</h2></div>
+        <button type="button" class="icon-button" data-close-created aria-label="Cerrar">×</button>
+      </div>
+      <p class="muted admin-created-intro">Envía estas credenciales al cliente para que active su caja en «Vincular Terminal».</p>
+      <dl id="negocioCreatedSummary" class="admin-credentials"></dl>
+      <p id="negocioCopyStatus" class="admin-hint" role="status"></p>
+      <div class="admin-dialog-actions">
+        <button type="button" class="outline-button" data-close-created>Cerrar</button>
+        <button id="negocioCopyCredentials" type="button" class="primary-button">📋 Copiar credenciales</button>
+      </div>
+    </dialog>
+
+    <!-- Eliminar negocio: borrado definitivo, se confirma escribiendo el ID (admin_delete_negocio lo vuelve a validar) -->
+    <dialog id="deleteNegocioDialog" class="small-dialog admin-dialog" aria-labelledby="deleteNegocioTitle">
+      <div class="dialog-header">
+        <div><p class="eyebrow admin-danger-eyebrow">Acción irreversible</p><h2 id="deleteNegocioTitle">Eliminar negocio</h2></div>
+        <button type="button" class="icon-button" data-close-delete aria-label="Cerrar">×</button>
+      </div>
+      <form id="deleteNegocioForm" class="activation-form" novalidate>
+        <p class="admin-delete-warning">Se borrarán de la nube <strong id="deleteNegocioName"></strong> y todos sus datos. No hay copia de seguridad: no se puede deshacer.</p>
+        <ul id="deleteNegocioSummary" class="admin-delete-summary"></ul>
+        <p class="admin-hint">Las cajas que tengan este negocio vinculado conservan sus datos locales, pero ya no podrán sincronizar.</p>
+        <label class="activation-field">
+          <span>Para confirmar, escribe el ID del negocio: <code id="deleteNegocioIdHint" class="admin-id"></code></span>
+          <input id="deleteNegocioConfirm" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" required />
+        </label>
+        <p id="deleteNegocioError" class="login-error activation-message" role="alert"></p>
+        <div class="admin-dialog-actions">
+          <button type="button" class="outline-button" data-close-delete>Cancelar</button>
+          <button id="deleteNegocioSubmit" type="submit" class="primary-button admin-danger-button" disabled>Eliminar definitivamente</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status"></div>
+    <script src="./admin.js"></script>
+  </body>
+</html>

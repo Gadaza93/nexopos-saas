@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="es-CO" class="is-booting">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- CSP: solo scripts propios (+ hash del script del tema), red solo hacia Supabase, imágenes locales/data:. Si cambia el script del tema, recalcular su hash. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-432IbPWBRs/a7hIDcQe8RwD0W7C2gCqATckDfW27Afg='; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#12141A" />
+    <meta name="description" content="NexoPos · POS Inteligente para Restaurantes y Cafeterías con funcionamiento local y sin conexión." />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <script>try{var t=localStorage.getItem("nexopos-theme")||localStorage.getItem("brasa-theme");if(t==="light")document.documentElement.dataset.theme="light";}catch(e){}</script>
+    <script src="./supabase.min.js" defer></script>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="design.css" />
+    <title>NexoPos · POS Inteligente para Restaurantes y Cafeterías</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark" id="brandMark"><img src="logo.png" alt="NexoPos" width="765" height="1024" decoding="async" /></span><span id="brandLabel">Nexo<strong>Pos</strong></span></div>
+        <nav aria-label="Navegación principal">
+          <button class="nav-link active" data-view="pos" data-perm="view.pos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg> Punto de venta</button>
+          <button class="nav-link" data-view="invoices" data-perm="view.invoices"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-2.4-1.6-2.4 1.6-2.4-1.6-2.4 1.6L6 20.5z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></svg> Facturas</button>
+          <button class="nav-link" data-view="products" data-perm="view.products"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14l-7 8.5z"/><path d="M12 12.5V20M8 20h8"/></svg> Productos</button>
+          <button class="nav-link" data-view="inventory" data-perm="view.inventory"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg> Inventario <i id="inventoryBadge">0</i></button>
+          <button class="nav-link" data-view="purchases" data-perm="view.purchases"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2.2l2.3 10.5h10.2L20 8H6.2"/><circle cx="9.5" cy="19" r="1.2"/><circle cx="17" cy="19" r="1.2"/></svg> Compras y gastos</button>
+          <button class="nav-link" data-view="reports" data-perm="view.reports"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M7 20v-6M12 20V5M17 20v-9"/></svg> Reportes</button>
+          <button class="nav-link" data-view="profile" data-perm="view.profile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5L5.6 4h12.8L20 9.5"/><path d="M5 20V9.5M19 20V9.5M4 20h16"/><path d="M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0"/><path d="M10 20v-5h4v5"/></svg> Mi negocio</button>
+          <button class="nav-link" data-view="team" data-perm="view.team"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="8" r="3.2"/><path d="M21 20v-1a3.5 3.5 0 0 0-2.6-3.4M16 4.8a3.2 3.2 0 0 1 0 6.4"/></svg> Equipo</button>
+        </nav>
+        <div class="side-bottom">
+          <div class="sync-state is-offline" id="syncStatusIndicator" title="Estado de sincronización en la nube (Click para forzar)"><span class="dot" id="syncDot"></span><span id="syncLabel">Modo Offline</span></div>
+          <button id="sidebarPullButton" class="text-button" type="button" title="Descargar datos de la nube / Restaurar">☁️ Descargar de la nube</button>
+          <button id="shiftStatusButton" class="shift-control">Caja cerrada · Abrir turno</button>
+          <button id="exportButton" class="text-button" data-perm="backup">Exportar respaldo</button>
+          <label class="text-button import-label" data-perm="backup">Importar respaldo<input id="importInput" type="file" accept="application/json" hidden /></label>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button id="btn-mobile-menu" class="mobile-menu-btn" aria-label="Abrir menú de navegación" title="Menú">&#9776;</button>
+            <div>
+              <p class="eyebrow" id="todayLabel">Hoy</p>
+              <h1 id="pageTitle">Punto de venta</h1>
+            </div>
+          </div>
+          <div class="top-actions">
+            <div id="syncBadgeTopbar" class="sync-badge-topbar is-offline" title="Sincronización en la nube (Click para sincronizar)"><span class="dot" id="syncBadgeDot"></span><span id="syncBadgeLabel">Modo Offline</span></div>
+            <button id="menuButton" class="outline-button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h3v3M20.5 14.5v.01M14.5 20.5h2M20.5 17.5v3h-1.5"/></svg>Menú QR</button>
+            <button id="newOrderButton" class="primary-button">+ Nuevo pedido</button>
+            <button id="themeToggle" class="icon-btn" aria-label="Cambiar entre tema oscuro y claro" title="Tema oscuro / claro"><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></button>
+            <button id="userChip" class="user-chip" aria-label="Mi sesión" hidden>?</button>
+          </div>
+        </header>
+
+        <section id="pos" class="view active-view">
+          <div class="subscription-banner" data-subscription-banner role="status" hidden></div>
+          <div class="stats-grid">
+            <article class="stat-card" data-perm="charge"><span>Ventas hoy</span><strong id="salesToday">$0</strong><small id="salesCount">0 cuentas cerradas</small></article>
+            <article class="stat-card"><span>Mesas activas</span><strong id="activeTables">0</strong><small id="activeItems">0 bebidas y platos</small></article>
+            <article class="stat-card"><span>Pedidos abiertos</span><strong id="openOrdersCount">0</strong><small>Mesas y cuentas sin cobrar</small></article>
+            <article class="stat-card accent" data-perm="charge"><span>Caja esperada</span><strong id="cashExpected">$0</strong><small>Pagos en efectivo</small></article>
+          </div>
+
+          <div class="section-heading">
+            <div><h2>Mesas y zonas</h2><p>Selecciona una mesa para tomar o continuar un pedido.</p></div>
+            <div class="section-actions"><div class="segmented table-view-toggle" role="group" aria-label="Vista de mesas"><button type="button" data-table-view="plano" data-plan-feature="floorMap">Plano del local</button><button type="button" data-table-view="grid">Cuadrícula compacta</button></div><button type="button" id="editFloorButton" class="outline-button floor-edit-link" data-perm="tables" title="Diseñar el plano en Mi negocio">⚙️ Editar plano</button><button id="newCustomOrderButton" class="outline-button">+ Cuenta personalizada</button><div class="segmented" id="zoneFilter"></div></div>
+          </div>
+          <div class="table-grid" id="tableGrid"></div>
+          <div id="tableFloorWrap" class="floorplan-wrap" hidden><div id="tableFloor" class="floorplan floorplan-live" aria-label="Plano del local"></div></div>
+          <div class="section-heading custom-orders-heading"><div><h2>Cuentas abiertas</h2><p>Pedidos para llevar o cuentas separadas por cliente.</p></div></div>
+          <div id="customOrdersList" class="custom-orders-list"></div>
+          <div class="section-heading recent-invoices-heading" data-perm="view.invoices"><div><h2>Últimas 5 facturas</h2><p>Consulta los últimos cobros registrados para validar cualquier diferencia.</p></div></div>
+          <div id="recentInvoices" class="recent-invoices" data-perm="view.invoices"></div>
+        </section>
+
+        <section id="invoices" class="view">
+          <div class="section-heading"><div><h2>Facturas</h2><p>Consulta los cobros realizados. El administrador puede corregir o eliminar una factura por error humano; todo queda en la bitácora.</p></div></div>
+          <div class="report-filters">
+            <label class="filter-date"><span>Fecha</span><input type="date" id="invoiceDate" /></label>
+            <button class="filter-chip" id="invoiceTodayButton">Hoy</button>
+            <button class="filter-chip" id="invoiceAllButton">Todas</button>
+            <select id="invoiceMethod" class="filter-select" aria-label="Medio de pago"><option value="">Todos los medios</option><option>Efectivo</option><option>Tarjeta</option><option>Nequi</option><option>Daviplata</option></select>
+            <input type="search" id="invoiceSearch" class="filter-search" placeholder="Buscar por N.º, mesa, mesero o producto" />
+          </div>
+          <div class="inventory-summary" id="invoiceSummary"></div>
+          <div id="invoiceList" class="recent-invoices"></div>
+        </section>
+
+        <section id="inventory" class="view">
+          <div class="section-heading"><div><h2>Inventario</h2><p>Existencias locales y alertas de stock mínimo.</p></div><div class="inline-actions"><button id="purchaseSuggestButton" class="outline-button">Sugerido de Compra / Proveedores</button><button id="newCountButton" class="outline-button" data-perm="conteo">Conteo físico</button><button id="newWasteButton" class="primary-button highlight-btn" data-perm="merma">Registrar Ajuste / Merma</button><button id="adjustInventoryButton" class="outline-button">Ajustar existencias</button></div></div>
+          <div class="inventory-summary" id="inventorySummary"></div>
+          <div class="data-card"><table><thead><tr><th>Producto</th><th>Disponible</th><th>Mínimo</th><th>Estado</th><th></th></tr></thead><tbody id="inventoryTable"></tbody></table></div>
+          <div class="data-card stock-log-card"><h3>Historial de Ajustes de Stock (Mermas, cortesías y conteos)</h3><table><thead><tr><th>Fecha y hora</th><th>Motivo / Tipo</th><th>Producto</th><th>Cantidad</th><th>Valor costo</th><th>Valor venta</th><th>Observación</th><th>Responsable</th></tr></thead><tbody id="stockLogTable"></tbody></table></div>
+        </section>
+
+        <section id="products" class="view">
+          <div class="section-heading"><div><h2>Productos</h2><p>Define lo que vendes, su costo, precio de venta y existencia inicial.</p></div><div class="inline-actions"><button id="downloadTemplateBtn" class="outline-button" type="button" title="Descargar plantilla Excel / CSV"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:15px;height:15px;vertical-align:-2px;margin-right:4px;"><path d="M12 3v12M7.5 10.5L12 15l4.5-4.5M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Descargar Plantilla</button><button id="importProductsBtn" class="outline-button" type="button" title="Importar productos masivamente desde Excel o CSV"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:15px;height:15px;vertical-align:-2px;margin-right:4px;"><path d="M12 16V4M7.5 8.5L12 4l4.5 4.5M4 20h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Importar Productos</button><button id="manageCategoriesButton" class="outline-button">Categorías</button><button id="newProductButton" class="primary-button">+ Nuevo producto</button></div></div>
+          <div class="data-card"><table><thead><tr><th>Producto</th><th>Categoría</th><th>Costo promedio</th><th>Venta</th><th>Ganancia</th><th>Rentabilidad</th><th>Existencias</th><th></th></tr></thead><tbody id="productsTable"></tbody></table></div>
+        </section>
+
+        <section id="purchases" class="view">
+          <div class="section-heading"><div><h2>Compras y gastos</h2><p>Registra facturas de mercancía, servicios y otros gastos de la operación.</p></div><div class="inline-actions"><button id="newSupplierButton" class="outline-button">+ Proveedor</button><button id="newExpenseButton" class="outline-button" data-plan-feature="expenses">+ Registrar gasto</button><button id="newPurchaseButton" class="primary-button">+ Factura de compra</button></div></div>
+          <div class="inventory-summary">
+            <div class="summary-item"><span>Compras de hoy</span><strong id="purchasesTotal">$0</strong></div>
+            <div class="summary-item"><span>Facturas ingresadas</span><strong id="purchaseInvoiceCount">0</strong></div>
+            <div class="summary-item warning"><span>Gastos de hoy</span><strong id="expensesTotal">$0</strong></div>
+          </div>
+          <div class="operations-grid">
+            <article class="data-card"><h3>Facturas de compra recientes</h3><div id="purchasesList" class="activity-list"></div></article>
+            <article class="data-card"><h3>Servicios y otros gastos</h3><div id="expensesList" class="activity-list"></div></article>
+          </div>
+          <div class="data-card suppliers-card"><h3>Proveedores</h3><p class="muted">Cada factura de compra actualiza el costo promedio ponderado del producto, así la utilidad refleja lo que realmente pagas.</p><table><thead><tr><th>Proveedor</th><th>NIT / CC</th><th>Teléfono</th><th>Facturas</th><th>Total comprado</th><th>Última compra</th><th></th></tr></thead><tbody id="suppliersTable"></tbody></table></div>
+        </section>
+
+        <section id="team" class="view">
+          <div class="section-heading"><div><h2>Equipo</h2><p>Usuarios con PIN y roles. Mesero: toma pedidos · Cajero: cobra, abre y cierra caja · Administrador: todo.</p></div><button id="newUserButton" class="primary-button" data-plan-feature="multiRole">+ Nuevo usuario</button></div>
+          <div class="data-card"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Último ingreso</th><th></th></tr></thead><tbody id="teamTable"></tbody></table></div>
+          <div class="section-heading history-heading"><div><h2>Bitácora de auditoría</h2><p>Facturas editadas o eliminadas, pedidos eliminados, mermas, conteos y cambios de usuarios (últimos 40).</p></div></div>
+          <div class="data-card"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th><th>Motivo</th></tr></thead><tbody id="auditTable"></tbody></table></div>
+        </section>
+
+        <section id="profile" class="view">
+          <div class="section-heading"><div><h2>Mi negocio</h2><p>Datos de tu establecimiento para comprobantes, comandas y facturas impresas.</p></div></div>
+          <div class="subscription-banner" data-subscription-banner role="status" hidden></div>
+          <div class="profile-grid">
+          <div class="profile-col">
+          <div class="profile-layout">
+            <article class="data-card profile-card"><div id="profileImagePreview" class="profile-image-preview">N</div><label class="outline-button file-button">Cambiar logo del ticket<input id="businessImage" type="file" accept="image/*" hidden /></label><p class="muted center">Logotipo exclusivo para comprobantes y facturas impresas.</p></article>
+            <article class="data-card profile-form"><label class="field-label" for="businessName">Nombre del establecimiento</label><input id="businessName" type="text" placeholder="Ej. NexoPos" /><label class="field-label" for="businessNit">NIT / RUT</label><input id="businessNit" type="text" placeholder="Ej. 900.000.000-1" /><label class="field-label" for="businessAddress">Dirección</label><input id="businessAddress" type="text" placeholder="Ej. Carrera 00 # 00-00" /><div class="two-fields"><div><label class="field-label" for="businessPhone">Número celular del local</label><input id="businessPhone" type="tel" placeholder="Ej. 300 000 0000" /></div><div><label class="field-label" for="businessOwnerPhone">Teléfono del Administrador / Dueño (WhatsApp)</label><input id="businessOwnerPhone" type="tel" placeholder="Ej. +57 300 123 4567" /></div></div><label class="field-label" for="businessSyncId">Identificador de sincronización en la nube (ID de Negocio)</label><input id="businessSyncId" type="text" placeholder="nexopos_default" /><button id="saveProfileButton" class="primary-button">Guardar información</button></article>
+          </div>
+          <article class="data-card subscription-card" id="subscriptionCard">
+            <h3>Licencia NexoPos</h3>
+            <div class="subscription-grid">
+              <div><span class="field-label">Estado</span><strong id="subscriptionStatus" class="subscription-badge">—</strong></div>
+              <div><span class="field-label">Plan actual</span><strong id="subscriptionPlan">—</strong></div>
+              <div><span class="field-label">Fecha de vencimiento</span><strong id="subscriptionExpiry">—</strong></div>
+            </div>
+            <p id="subscriptionNote" class="muted subscription-note"></p>
+            <button type="button" class="primary-button plan-upgrade-button" data-plan-upgrade hidden>Mejorar a Plan Pro</button>
+          </article>
+          </div>
+          <div class="profile-col">
+          <article class="data-card backup-card" id="cloudSyncCard">
+            <h3>Sincronización en la nube (Supabase)</h3>
+            <p class="muted">Conecta tu negocio en la nube para usar NexoPos desde múltiples dispositivos (computador, celular, tablet o acceso web). Puedes descargar todos tus datos existentes o forzar la subida de cambios.</p>
+            <div class="backup-actions">
+              <button id="pullFromCloudButton" class="primary-button" type="button">☁️ Descargar datos de la nube / Restaurar</button>
+              <button id="syncNowButton" class="outline-button" type="button">🔄 Sincronizar todo ahora</button>
+            </div>
+            <p id="cloudSyncStatus" class="muted" style="margin-top:0.4rem;font-size:0.85rem;"></p>
+          </article>
+          <article class="data-card backup-card" id="shiftResetCard">
+            <h3>Turno y Estado de Caja</h3>
+            <p class="muted">Si la caja presenta un saldo desfasado por turnos anteriores no cerrados o inconsistentes, puedes reiniciar el turno y restablecer el saldo esperado a $0 tanto localmente como en la nube.</p>
+            <div class="backup-actions">
+              <button id="resetShiftConfigButton" class="danger-outline-button" type="button">⚠️ Forzar cierre de turno y reiniciar saldo a $0</button>
+            </div>
+          </article>
+          <article class="data-card backup-card print-settings-card" id="printSettingsCard">
+            <h3>Impresión de tickets</h3>
+            <p class="muted">Comprobantes de venta, reimpresiones y Ticket Z para impresoras térmicas. Se guarda en este equipo.</p>
+            <div class="print-settings-grid">
+              <label class="field-label" for="printPaperWidth">Ancho del rollo
+                <select id="printPaperWidth"><option value="80">80 mm (estándar)</option><option value="58">58 mm (compacta)</option></select>
+              </label>
+              <label class="field-label" for="printPrinterName" data-desktop-only hidden>Impresora
+                <span class="print-printer-row"><select id="printPrinterName"><option value="">Predeterminada de Windows</option></select><button id="printRefreshPrinters" class="outline-button" type="button" title="Volver a buscar impresoras">↻</button></span>
+              </label>
+            </div>
+            <label class="check-row" data-desktop-only hidden><input type="checkbox" id="printSilent" /> Imprimir directo, sin mostrar el diálogo de impresión</label>
+            <div class="backup-actions"><button id="printTestButton" class="outline-button" type="button">🖨 Imprimir ticket de prueba</button></div>
+          </article>
+          <article class="data-card backup-card" data-perm="backup">
+            <h3>Respaldos de la base de datos</h3>
+            <p class="muted">Se guarda una copia completa de todo (ventas, inventario, usuarios, bitácora). Para restaurarla usa «Importar respaldo».</p>
+            <div id="backupStatus" class="backup-status"></div>
+            <div class="backup-options">
+              <label class="check-row"><input type="checkbox" id="backupOnClose" /> Respaldar automáticamente al cerrar caja</label>
+              <label class="check-row" data-desktop-only hidden><input type="checkbox" id="backupDaily" /> Respaldo diario automático (si ese día aún no se respaldó)</label>
+            </div>
+            <div class="backup-actions"><button id="backupNowButton" class="primary-button">Respaldar ahora</button><button id="openBackupFolderButton" class="outline-button" data-desktop-only hidden>Abrir carpeta de respaldos</button><button id="chooseBackupFolderButton" class="outline-button" data-desktop-only hidden>Cambiar carpeta</button></div>
+            <p class="field-label">Últimos respaldos</p><div id="backupLog" class="report-list"></div>
+            <p id="storageInfo" class="storage-info"></p>
+          </article>
+          </div>
+          </div>
+          <article class="data-card floor-designer-card" id="floorDesignerCard" data-perm="tables">
+            <div class="floor-designer-head">
+              <div><h3>Mesas y distribución</h3><p class="muted">Arrastra las mesas para ubicarlas como en tu local (mouse o dedo). Toca una para renombrarla, cambiar su tipo o zona. Los cambios se aplican al pulsar «Guardar distribución».</p><p class="plan-table-count" data-plan-table-count hidden></p></div>
+              <div class="inline-actions"><button type="button" id="floorAddTable" class="outline-button">+ Mesa</button><button type="button" id="floorAddCounter" class="outline-button">+ Mostrador/Barra</button><button type="button" id="floorDiscardButton" class="outline-button" disabled>Descartar</button><button type="button" id="floorSaveButton" class="primary-button" disabled>Guardar distribución</button></div>
+            </div>
+            <div class="floorplan-wrap"><div id="floorplan-designer" class="floorplan floorplan-designer" aria-label="Diseñador del plano"></div></div>
+            <div id="floorEditor" class="floor-editor"></div>
+            <p id="floorDirtyLabel" class="muted floor-dirty"></p>
+          </article>
+        </section>
+
+        <section id="reports" class="view">
+          <p id="printHeader" class="print-header"></p>
+          <div id="reportWatermarkTop" class="demo-watermark-bar demo-watermark-top" hidden>DOCUMENTO DE DEMOSTRACIÓN — NETXPREMIUM</div>
+          <div class="section-heading"><div><h2 id="reportHeading">Resumen de hoy</h2><p id="reportSubheading">Datos generados desde este dispositivo.</p></div><div class="inline-actions report-actions"><button id="exportXlsxButton" class="outline-button" data-plan-feature="exports">Exportar Excel</button><button id="printReportButton" class="outline-button" data-plan-feature="exports">Imprimir / PDF</button><button id="closeShiftButton" class="primary-button" data-perm="shift">Cerrar turno</button></div></div>
+          <div class="report-subtabs" role="tablist" aria-label="Secciones de reportes">
+            <button type="button" class="report-subtab active" role="tab" aria-selected="true" data-report-tab="summary">Resumen</button>
+            <button type="button" class="report-subtab" role="tab" aria-selected="false" data-report-tab="net" data-plan-feature="netProfit">Utilidad neta</button>
+            <button type="button" class="report-subtab" role="tab" aria-selected="false" data-report-tab="inventory" data-plan-feature="inventoryValue">Valoración de inventario</button>
+          </div>
+          <div id="netProfitPanel" class="net-profit-panel" hidden>
+            <div class="report-filters" id="netFilters">
+              <button class="filter-chip" data-net-range="today">Hoy</button>
+              <button class="filter-chip" data-net-range="week">Esta semana</button>
+              <button class="filter-chip active" data-net-range="month">Este mes</button>
+              <button class="filter-chip" data-net-range="lastMonth">Mes pasado</button>
+              <button class="filter-chip" data-net-range="custom">Personalizado</button>
+              <span id="netCustomRange" class="net-custom-range" hidden><label class="filter-date"><span>Desde</span><input type="date" id="netFrom" aria-label="Fecha inicial" /></label><label class="filter-date"><span>Hasta</span><input type="date" id="netTo" aria-label="Fecha final" /></label></span>
+            </div>
+            <p class="muted net-range-label" id="netRangeLabel"></p>
+            <div class="stats-grid net-kpis">
+              <article class="stat-card"><span>Ventas totales</span><strong id="netSales">$0</strong><small id="netSalesNote">0 facturas</small></article>
+              <article class="stat-card"><span>Costo mercancía</span><strong id="netCogs">$0</strong><small id="netCogsNote">Costo de lo vendido</small></article>
+              <article class="stat-card"><span>Gastos totales</span><strong id="netExpenses">$0</strong><small id="netExpensesNote">0 registros</small></article>
+              <article class="stat-card net-result" id="netProfitCard"><span>Utilidad neta</span><strong id="netProfit">$0</strong><small id="netProfitNote">Sin movimientos</small></article>
+              <article class="stat-card net-result" id="netMarginCard"><span>Margen neto</span><strong id="netMargin">0,0%</strong><small id="netMarginNote">Sobre ventas netas</small></article>
+            </div>
+            <div class="report-layout">
+              <article class="data-card"><h3>Cascada de utilidad</h3><div id="netWaterfall" class="report-list"></div><p id="netVerdict" class="net-verdict"></p></article>
+              <article class="data-card"><h3>Gastos por categoría</h3><p class="muted">Gastos de caja menor de los turnos y gastos fijos/generales del período. Las compras de mercancía no se suman aquí: ya están en el costo de ventas.</p><div id="netExpenseGroups" class="net-groups"></div></article>
+            </div>
+          </div>
+          <div id="inventoryValuePanel" class="inventory-value-panel" hidden>
+            <div class="report-filters"><p class="muted inv-value-note">Existencias actuales del catálogo valorizadas al costo promedio y al precio de venta.</p><button type="button" id="exportInventoryXlsxButton" class="outline-button" data-plan-feature="exports">Exportar Inventario Valorizado</button></div>
+            <div class="stats-grid inv-value-kpis">
+              <article class="stat-card"><span>Capital invertido total</span><strong id="invCapital">$0</strong><small id="invCapitalNote">Stock × costo</small></article>
+              <article class="stat-card"><span>Valor comercial total</span><strong id="invCommercial">$0</strong><small>Stock × precio de venta</small></article>
+              <article class="stat-card net-result" id="invProfitCard"><span>Ganancia proyectada en bodega</span><strong id="invProfit">$0</strong><small>Valor comercial − capital</small></article>
+              <article class="stat-card net-result" id="invMarginCard"><span>Margen potencial</span><strong id="invMargin">—</strong><small>Sobre el valor comercial</small></article>
+            </div>
+            <div class="data-card inv-value-card"><table class="inv-value-table"><thead><tr><th>Producto</th><th>Stock actual</th><th>Costo unitario</th><th>Total costo</th><th>Precio venta</th><th>Utilidad proyectada</th></tr></thead><tbody id="inventoryValueTable"></tbody><tfoot id="inventoryValueTotals"></tfoot></table></div>
+          </div>
+          <div id="reportSummaryPanel">
+          <div class="report-filters" id="reportFilters">
+            <button class="filter-chip active" data-report-range="today">Hoy</button>
+            <button class="filter-chip" data-report-range="7">7 días</button>
+            <button class="filter-chip" data-report-range="15">15 días</button>
+            <button class="filter-chip" data-report-range="30">30 días</button>
+            <label class="filter-date"><span>Fecha</span><input type="date" id="reportDate" aria-label="Escoger una fecha" /></label>
+          </div>
+          <div class="report-layout">
+            <article class="data-card wide-report" id="dailyChartCard" hidden><h3>Ventas por día</h3><div id="dailyChart" class="day-chart"></div><div id="dailySummary" class="report-list"></div></article>
+            <article class="data-card report-total"><span>Venta registrada</span><strong id="reportTotal">$0</strong><small id="reportTicket">0 tickets · Promedio $0</small></article>
+            <article class="data-card"><h3>Pagos recibidos</h3><div id="paymentReport" class="report-list"></div></article>
+            <article class="data-card"><h3>Productos más vendidos</h3><div id="productReport" class="report-list"></div></article>
+            <article class="data-card chart-card"><h3>Ventas por producto</h3><div id="profitChart" class="bar-chart"></div></article>
+            <article class="data-card"><h3>Informe de utilidad bruta</h3><div id="profitReport" class="report-list"></div></article>
+            <article class="data-card"><h3 id="opsTitle">Compras y gastos de hoy</h3><div id="operationsReport" class="report-list"></div></article>
+            <article class="data-card wide-report"><h3>Comparativo con el período anterior</h3><p class="muted" id="comparisonRange"></p><div id="comparisonReport"></div></article>
+            <article class="data-card wide-report"><h3>Ventas por hora</h3><p class="muted">Cuándo reforzar personal: las barras naranja marcan la hora pico.</p><div id="hourChart" class="day-chart hour-chart"></div><div id="hourSummary" class="report-list"></div></article>
+            <article class="data-card wide-report"><h3>Ventas por día de la semana</h3><div id="weekdayChart" class="day-chart weekday-chart"></div><div id="weekdaySummary" class="report-list"></div></article>
+            <article class="data-card chart-card"><h3>Ventas por categoría</h3><div id="categoryChart" class="bar-chart"></div></article>
+            <article class="data-card"><h3>Ventas por mesero</h3><div id="waiterReport" class="report-list"></div></article>
+            <article class="data-card"><h3>Mermas y diferencias de inventario</h3><div id="stockReport" class="report-list"></div></article>
+            <article class="data-card"><h3>Próximo cierre</h3><p class="muted">Revisa el efectivo, anota las novedades y registra el cierre cuando termine el turno.</p><button id="openCloseButton" class="outline-button full">Preparar cierre de caja</button></article>
+          </div>
+          <div class="section-heading history-heading"><div><h2>Historial de movimientos</h2><p>Facturas, compras, gastos y cierres registrados en este dispositivo.</p></div></div>
+          <div id="historyList" class="history-list"></div>
+          </div>
+          <div id="reportWatermarkBottom" class="demo-watermark-bar demo-watermark-bottom" hidden>DOCUMENTO DE DEMOSTRACIÓN — NETXPREMIUM</div>
+          <p id="printFooter" class="print-footer" hidden></p>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="orderDialog" class="wide-dialog">
+      <div class="dialog-header"><div><p class="eyebrow" id="orderZone">BARRA</p><h2 id="orderTitle">Nuevo pedido</h2></div><div class="order-header-actions"><button id="moveOrderButton" class="outline-button order-move-btn" type="button" disabled>⇄ Mover / Unir</button><button class="icon-button" data-close="orderDialog" aria-label="Cerrar">×</button></div></div>
+      <!-- Pestañas solo visibles en móvil -->
+      <div class="order-tabs-mobile" id="orderTabsMobile">
+        <button type="button" class="order-tab-btn active" id="orderTabProducts" data-tab="products"><span>&#127874;</span> Catálogo</button>
+        <button type="button" class="order-tab-btn" id="orderTabTicket" data-tab="ticket"><span>&#128203;</span> Cuenta <span id="mobileOrderCount" class="badge">0</span></button>
+      </div>
+      <div class="order-layout">
+        <section class="catalog-panel"><div class="search-wrap"><input id="productSearch" type="search" placeholder="Buscar bebida, plato o cóctel" /><span>⌕</span></div><div id="categoryTabs" class="category-tabs"></div><div id="productGrid" class="product-grid"></div></section>
+        <!-- Barra flotante visible solo en móvil cuando se ve el catálogo -->
+        <div class="mobile-order-bar" id="mobileOrderBar">
+          <div class="mobile-order-bar-info" id="mobileBarInfo" title="Ver cuenta">
+            <span class="mobile-order-bar-count" id="mobileBarCount">0 productos</span>
+            <span class="mobile-order-bar-total" id="mobileBarTotal">$0</span>
+          </div>
+          <div class="mobile-order-bar-actions">
+            <button type="button" class="outline-button mobile-order-bar-expand" id="mobileBarTicketBtn" disabled>Ver comanda</button>
+            <button type="button" class="primary-button mobile-order-bar-charge" id="mobileBarChargeBtn" data-perm="charge" disabled>Cobrar</button>
+          </div>
+        </div>
+        <section class="ticket-panel">
+          <div id="ticketWatermarkTop" class="demo-watermark-tag" hidden>DOCUMENTO DE DEMOSTRACIÓN — NETXPREMIUM</div>
+          <div class="ticket-head"><span>CUENTA ACTUAL</span><button id="deleteOrderButton" class="danger-link" data-perm="cancelOrder">Eliminar</button></div>
+          <div id="ticketItems" class="ticket-items"></div>
+          <div class="ticket-note"><label for="orderNote">Nota del pedido</label><textarea id="orderNote" rows="2" placeholder="Ej. cliente frecuente, mesa compartida…"></textarea></div>
+          <p id="paidNote" class="paid-note" hidden></p>
+          <div class="ticket-total"><span>Total</span><strong id="orderTotal">$0</strong></div>
+          <div id="ticketWatermarkBottom" class="demo-watermark-tag" hidden>DOCUMENTO DE DEMOSTRACIÓN — NETXPREMIUM</div>
+          <div class="ticket-actions"><button id="splitBillButton" class="outline-button" data-perm="charge">Dividir cuenta</button><button id="saveOrderButton" class="outline-button">Guardar pedido</button><button id="chargeButton" class="primary-button" data-perm="charge">Cobrar</button></div>
+        </section>
+      </div>
+    </dialog>
+
+    <dialog id="paymentDialog" class="small-dialog payment-dialog">
+      <div class="dialog-header"><div><p class="eyebrow" id="paymentEyebrow">COBRAR CUENTA</p><h2 id="paymentTitle">Cobro de cuenta</h2></div><button class="icon-button" data-close="paymentDialog" aria-label="Cerrar">×</button></div>
+      <div id="payWatermarkTop" class="demo-watermark-tag" hidden>DOCUMENTO DE DEMOSTRACIÓN — NETXPREMIUM</div>
+      <div class="payment-summary-cards">
+        <div class="pay-sum-card"><span>Total a pagar</span><strong id="payTotalAmount">$0</strong></div>
+        <div class="pay-sum-card"><span>Cubierto</span><strong id="payCoveredAmount" class="text-success">$0</strong></div>
+        <div class="pay-sum-card highlight"><span>Saldo pendiente</span><strong id="payPendingAmount" class="text-pending">$0</strong></div>
+      </div>
+      <div class="payment-tender-section">
+        <label class="field-label">Método de pago</label>
+        <div class="payment-methods-grid" id="paymentOptions"></div>
+        <div class="two-fields tender-inputs-row">
+          <div><label class="field-label" for="amountReceived">Monto a abonar</label><input id="amountReceived" class="amount-input" type="number" min="1" inputmode="numeric" placeholder="$0" /></div>
+          <div id="tenderCashBox"><label class="field-label" for="tenderCashReceived">Efectivo recibido</label><input id="tenderCashReceived" class="amount-input" type="number" min="0" inputmode="numeric" placeholder="$0" /></div>
+        </div>
+        <p id="changeMessage" class="change-message"></p>
+        <button id="addTenderButton" type="button" class="outline-button full add-tender-btn">+ Agregar este pago</button>
+      </div>
+      <div class="tenders-list-wrapper">
+        <label class="field-label">Pagos aplicados a esta cuenta</label>
+        <div id="paymentTendersList" class="payment-tenders-list"><p class="muted empty-tenders-msg">Aún no has agregado pagos.</p></div>
+      </div>
+      <div id="payWatermarkBottom" class="demo-watermark-tag" hidden>DOCUMENTO DE DEMOSTRACIÓN — NETXPREMIUM</div>
+      <button id="confirmPaymentButton" class="primary-button full finalize-pay-btn">Finalizar Cobro</button>
+    </dialog>
+
+    <dialog id="splitBillDialog" class="wide-dialog split-bill-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">DIVISIÓN DE CUENTA</p><h2 id="splitBillTitle">Dividir cuenta</h2></div><button class="icon-button" data-close="splitBillDialog" aria-label="Cerrar">×</button></div>
+      <div class="split-modes-nav">
+        <button id="splitModeEqualBtn" class="split-nav-btn active" type="button">Dividir en partes iguales</button>
+        <button id="splitModeItemsBtn" class="split-nav-btn" type="button">Dividir por productos / ítems</button>
+      </div>
+
+      <!-- Modo A: Partes Iguales -->
+      <section id="splitEqualSection" class="split-section">
+        <div class="people-selector-card">
+          <div class="people-stepper-wrap">
+            <span class="stepper-label">Número de personas:</span>
+            <div class="people-stepper">
+              <button id="splitPeopleDec" class="stepper-btn" type="button">−</button>
+              <input id="splitPeopleCount" type="number" min="2" max="20" value="2" readonly />
+              <button id="splitPeopleInc" class="stepper-btn" type="button">+</button>
+            </div>
+          </div>
+          <div class="people-presets">
+            <button class="people-preset-btn" data-people="2" type="button">2 personas</button>
+            <button class="people-preset-btn" data-people="3" type="button">3 personas</button>
+            <button class="people-preset-btn" data-people="4" type="button">4 personas</button>
+            <button class="people-preset-btn" data-people="5" type="button">5 personas</button>
+          </div>
+        </div>
+        <div class="split-equal-summary">
+          <div class="summary-line"><span>Total de la mesa:</span><strong id="splitEqualTotalOrder">$0</strong></div>
+          <div class="summary-line highlight"><span>Valor por persona:</span><strong id="splitEqualPerPerson" class="text-orange">$0</strong></div>
+        </div>
+        <div class="split-fractions-list" id="splitFractionsList"></div>
+      </section>
+
+      <!-- Modo B: Por Productos / Ítems -->
+      <section id="splitItemsSection" class="split-section" hidden>
+        <p class="split-instructions muted">Selecciona los productos y unidades que deseas cobrar en esta fracción. El saldo restante permanecerá en la mesa.</p>
+        <div class="split-items-actions">
+          <button id="splitSelectAllBtn" class="text-add-button" type="button">Seleccionar todo</button>
+          <button id="splitClearBtn" class="text-add-button" type="button">Limpiar selección</button>
+        </div>
+        <div class="split-items-table-wrap">
+          <table class="split-items-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>En mesa</th>
+                <th>Cobrar ahora</th>
+                <th class="text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="splitItemsTableBody"></tbody>
+          </table>
+        </div>
+        <div class="split-items-bottom">
+          <div class="split-selection-summary">
+            <span>Unidades a cobrar: <strong id="splitItemsSelectedUnits">0</strong></span>
+            <span>Total selección: <strong id="splitItemsSelectedTotal" class="text-orange">$0</strong></span>
+          </div>
+          <button id="chargeSelectedItemsBtn" class="primary-button" type="button" disabled>Cobrar Selección</button>
+        </div>
+      </section>
+    </dialog>
+
+    <dialog id="inventoryDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">INVENTARIO</p><h2>Ajustar existencias</h2></div><button class="icon-button" data-close="inventoryDialog" aria-label="Cerrar">×</button></div>
+      <label class="field-label" for="inventorySelect">Insumo</label><select id="inventorySelect"></select>
+      <label class="field-label" for="inventoryAmount">Cantidad a sumar o restar</label><input id="inventoryAmount" type="number" step="0.1" placeholder="Ej. -2 o 12" />
+      <label class="field-label" for="inventoryReason">Motivo</label><input id="inventoryReason" type="text" placeholder="Compra, merma, conteo…" />
+      <button id="saveInventoryButton" class="primary-button full">Guardar ajuste</button>
+    </dialog>
+
+    <dialog id="productDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">CATÁLOGO</p><h2>Nuevo producto</h2></div><button class="icon-button" data-close="productDialog" aria-label="Cerrar">×</button></div>
+      <label class="field-label" for="productName">Nombre del producto</label><input id="productName" type="text" placeholder="Ej. Cerveza artesanal 330 ml" />
+      <label class="field-label" for="productCategory">Categoría</label><input id="productCategory" type="text" list="categoryOptions" placeholder="Ej. Cervezas" /><datalist id="categoryOptions"><option>Cervezas</option><option>Cocteles</option><option>Licores</option><option>Sin alcohol</option><option>Comidas</option></datalist>
+      <div class="two-fields"><div><label class="field-label" for="productCost">Precio de costo</label><input id="productCost" type="number" min="0" inputmode="numeric" placeholder="$0" /></div><div><label class="field-label" for="productPrice">Precio de venta</label><input id="productPrice" type="number" min="0" inputmode="numeric" placeholder="$0" /></div></div>
+      <div class="three-fields"><div><label class="field-label" for="productStock">Stock actual</label><input id="productStock" type="number" min="0" step="0.1" placeholder="0" /></div><div><label class="field-label" for="productMinStock">Stock mínimo</label><input id="productMinStock" type="number" min="0" step="0.1" placeholder="0" /></div><div><label class="field-label" for="productUnit">Unidad</label><select id="productUnit"><option value="und">Unidad</option><option value="botella">Botella</option><option value="L">Litro</option><option value="porción">Porción</option></select></div></div>
+      <label class="field-label" for="productImage">Imagen del producto</label><div class="product-image-input"><div id="productImagePreview" class="product-image-preview">🍾</div><label class="outline-button file-button">Seleccionar imagen<input id="productImage" type="file" accept="image/*" hidden /></label></div>
+      <button id="saveProductButton" class="primary-button full">Crear producto e inventario</button>
+    </dialog>
+
+    <dialog id="purchaseDialog" class="small-dialog purchase-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">INGRESO DE MERCANCÍA</p><h2>Factura de compra</h2></div><button class="icon-button" data-close="purchaseDialog" aria-label="Cerrar">×</button></div>
+      <div class="two-fields"><div><label class="field-label" for="purchaseSupplier">Proveedor</label><input id="purchaseSupplier" type="text" list="supplierOptions" placeholder="Nombre del proveedor" /><datalist id="supplierOptions"></datalist></div><div><label class="field-label" for="purchaseInvoice">N.º de factura</label><input id="purchaseInvoice" type="text" placeholder="Ej. FE-1024" /></div></div>
+      <div class="two-fields"><div><label class="field-label" for="purchaseDate">Fecha</label><input id="purchaseDate" type="date" /></div><div><label class="field-label" for="purchaseMethod">Medio de pago</label><select id="purchaseMethod"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option><option>Nequi</option></select></div></div>
+      <p class="field-label">Productos recibidos</p><div id="purchaseLines" class="purchase-lines"></div>
+      <button id="addPurchaseLineButton" class="text-add-button">+ Agregar otro producto</button>
+      <div class="dialog-total"><span>Total de la compra</span><strong id="purchaseTotal">$0</strong></div>
+      <button id="recordPurchaseButton" class="primary-button full">Guardar factura e ingresar mercancía</button>
+    </dialog>
+
+    <dialog id="expenseDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">EGRESO</p><h2>Registrar gasto</h2></div><button class="icon-button" data-close="expenseDialog" aria-label="Cerrar">×</button></div>
+      <label class="field-label" for="expenseCategory">Tipo de gasto</label><select id="expenseCategory"><option>Servicios públicos</option><option>Arriendo</option><option>Nómina</option><option>Transporte</option><option>Marketing</option><option>Mantenimiento</option><option>Personal / DJ</option><option>Insumos / caja menor</option><option>Otros gastos</option></select>
+      <label class="field-label" for="expenseDescription">Descripción</label><input id="expenseDescription" type="text" placeholder="Ej. Pago de energía eléctrica" />
+      <div class="two-fields"><div><label class="field-label" for="expenseAmount">Valor pagado</label><input id="expenseAmount" type="number" min="0" inputmode="numeric" placeholder="$0" /></div><div><label class="field-label" for="expenseMethod">Medio de pago</label><select id="expenseMethod"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option><option>Nequi</option></select></div></div>
+      <label class="field-label" for="expenseDate">Fecha</label><input id="expenseDate" type="date" />
+      <button id="saveExpenseButton" class="primary-button full">Registrar gasto</button>
+    </dialog>
+
+    <dialog id="closeDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">CIERRE DE CAJA</p><h2>Confirmar efectivo</h2></div><button class="icon-button" data-close="closeDialog" aria-label="Cerrar">×</button></div>
+      <div id="closeSummary" class="close-summary"></div>
+      <p class="muted">Efectivo esperado al finalizar: <strong id="expectedCashInClose">$0</strong></p>
+      <p class="field-label">Cuenta el efectivo por denominación</p><div id="cashCounter" class="cash-counter"></div>
+      <label class="field-label" for="countedCash">Total efectivo contado</label><input id="countedCash" class="amount-input" type="number" min="0" inputmode="numeric" readonly />
+      <p id="cashDifference" class="change-message"></p>
+      <button id="confirmCloseButton" class="primary-button full">Registrar cierre</button>
+      <button id="forceResetShiftButton" type="button" class="outline-button full" style="margin-top:8px;border-color:var(--danger,#e53e3e);color:var(--danger,#e53e3e);font-size:13px;font-weight:600;">Forzar cierre de turno y reiniciar saldo a $0</button>
+    </dialog>
+
+    <dialog id="openShiftDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">APERTURA DE CAJA</p><h2>Abrir turno</h2></div><button class="icon-button" data-close="openShiftDialog" aria-label="Cerrar">×</button></div>
+      <p class="muted">Registra cuánto efectivo físico queda inicialmente en la caja.</p>
+      <label class="field-label" for="openingCash">Base inicial en efectivo</label><input id="openingCash" class="amount-input" type="number" min="0" inputmode="numeric" placeholder="$0" />
+      <button id="confirmOpenShiftButton" class="primary-button full">Abrir turno de caja</button>
+    </dialog>
+
+    <dialog id="categoriesDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">CATÁLOGO</p><h2>Categorías de productos</h2></div><button class="icon-button" data-close="categoriesDialog" aria-label="Cerrar">×</button></div>
+      <div id="categoryList" class="category-list"></div>
+      <label class="field-label" for="newCategoryName">Nueva categoría</label><div class="add-category"><input id="newCategoryName" type="text" placeholder="Ej. Vinos" /><button id="addCategoryButton" class="primary-button">Agregar</button></div>
+    </dialog>
+
+    <dialog id="customOrderDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">CUENTA PERSONALIZADA</p><h2>Nuevo pedido</h2></div><button class="icon-button" data-close="customOrderDialog" aria-label="Cerrar">×</button></div>
+      <label class="field-label" for="customOrderName">Nombre para identificar la cuenta</label><input id="customOrderName" type="text" placeholder="Ej. Cuenta de Valentina" />
+      <p class="muted">Podrás seguir agregando productos y editar esta cuenta hasta que decidas cobrarla.</p>
+      <button id="createCustomOrderButton" class="primary-button full">Crear cuenta</button>
+    </dialog>
+
+    <dialog id="menuDialog" class="small-dialog menu-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">MENÚ DIGITAL</p><h2>Comparte tu carta</h2></div><button class="icon-button" data-close="menuDialog" aria-label="Cerrar">×</button></div>
+      <div class="fake-qr" aria-label="Código QR decorativo"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <p class="muted center">En la versión conectada, este código abrirá tu carta pública y los clientes podrán pedir desde la mesa.</p>
+    </dialog>
+
+
+    <dialog id="loginDialog" class="small-dialog login-dialog">
+      <div class="login-brand"><span class="brand-mark"><img src="logo.png" alt="NexoPos" width="765" height="1024" decoding="async" /></span><h2 id="loginTitle">NexoPos</h2><p class="muted">Selecciona tu usuario e ingresa tu PIN</p></div>
+      <div id="loginUsers" class="login-users"></div>
+      <div id="loginPinBox" class="login-pin" hidden>
+        <p class="login-who"><button id="loginBackButton" class="text-add-button">← Cambiar usuario</button><strong id="loginWho"></strong></p>
+        <div class="pin-dots" id="pinDots"><i></i><i></i><i></i><i></i></div>
+        <p id="loginError" class="login-error" role="alert"></p>
+        <button id="forgotPinButton" type="button" class="text-add-button login-forgot">¿Olvidaste tu PIN?</button>
+        <div class="keypad">
+          <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button><button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button><button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button><span></span><button data-key="0">0</button><button data-key="back" aria-label="Borrar">⌫</button>
+        </div>
+      </div>
+      <p id="loginHint" class="muted center"></p>
+    </dialog>
+
+    <!-- Activación de terminal: bloquea el POS hasta vincular la caja a un negocio -->
+    <dialog id="activationDialog" class="small-dialog login-dialog activation-dialog" aria-labelledby="activationTitle">
+      <div class="login-brand activation-brand">
+        <span class="brand-mark"><img src="logo.png" alt="NexoPos" width="765" height="1024" fetchpriority="high" /></span>
+        <p class="eyebrow">NexoPos</p>
+        <h2 id="activationTitle">Vincular Terminal</h2>
+        <p class="muted">Ingresa las credenciales maestras de tu negocio para activar esta caja</p>
+      </div>
+      <form id="activationForm" class="activation-form" novalidate>
+        <label class="activation-field">
+          <span>Correo electrónico del establecimiento</span>
+          <input id="activationEmail" type="email" autocomplete="username" inputmode="email" placeholder="caja@tubar.com" required />
+        </label>
+        <label class="activation-field">
+          <span>Contraseña maestra</span>
+          <input id="activationPassword" type="password" autocomplete="current-password" placeholder="••••••••" required />
+        </label>
+        <button id="forgotPasswordButton" type="button" class="text-add-button activation-forgot">¿Olvidaste tu contraseña?</button>
+        <p id="activationError" class="login-error activation-message" role="alert"></p>
+        <button id="activationSubmit" type="submit" class="primary-button activation-primary">Vincular y Descargar Catálogo</button>
+        <button id="activationDemo" type="button" class="outline-button activation-secondary">Probar Modo Demo</button>
+      </form>
+      <p class="muted center activation-foot">Esta vinculación se hace una sola vez por equipo. Después la caja funciona sin conexión.</p>
+    </dialog>
+
+    <!-- Recuperar la contraseña maestra: código de 6 dígitos por correo (Edge Function recuperar-acceso) -->
+    <dialog id="recoveryDialog" class="small-dialog login-dialog activation-dialog" aria-labelledby="recoveryTitle">
+      <div class="login-brand activation-brand">
+        <p class="eyebrow">NexoPos</p>
+        <h2 id="recoveryTitle">Recuperar contraseña</h2>
+        <p id="recoverySubtitle" class="muted">Te enviaremos un código de 6 dígitos al correo del establecimiento.</p>
+      </div>
+      <form id="recoveryRequestForm" class="activation-form" novalidate>
+        <label class="activation-field">
+          <span>Correo electrónico del establecimiento</span>
+          <input id="recoveryEmail" type="email" autocomplete="username" inputmode="email" placeholder="caja@tubar.com" required />
+        </label>
+        <button id="recoveryRequestSubmit" type="submit" class="primary-button activation-primary">Enviar código</button>
+      </form>
+      <form id="recoveryConfirmForm" class="activation-form" novalidate hidden>
+        <label class="activation-field">
+          <span>Código de 6 dígitos</span>
+          <input id="recoveryCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" class="recovery-code" required />
+        </label>
+        <label class="activation-field">
+          <span>Nueva contraseña maestra</span>
+          <input id="recoveryPassword" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres" required />
+        </label>
+        <label class="activation-field">
+          <span>Confirmar contraseña</span>
+          <input id="recoveryPassword2" type="password" autocomplete="new-password" placeholder="Repite la contraseña" required />
+        </label>
+        <button id="recoveryConfirmSubmit" type="submit" class="primary-button activation-primary">Cambiar contraseña</button>
+        <button id="recoveryResend" type="button" class="text-add-button activation-forgot">¿No llegó? Enviar otro código</button>
+      </form>
+      <p id="recoveryMessage" class="login-error activation-message" role="alert"></p>
+      <button type="button" class="outline-button activation-secondary" data-close="recoveryDialog">Volver</button>
+    </dialog>
+
+    <!-- Cuenta nueva: la contraseña temporal del correo se cambia por la definitiva antes de vincular -->
+    <dialog id="passwordChangeDialog" class="small-dialog login-dialog activation-dialog" aria-labelledby="passwordChangeTitle">
+      <div class="login-brand activation-brand">
+        <p class="eyebrow">NexoPos</p>
+        <h2 id="passwordChangeTitle">Crea tu contraseña</h2>
+        <p class="muted">Entraste con la contraseña temporal del correo. Por seguridad, crea ahora tu contraseña definitiva.</p>
+      </div>
+      <form id="passwordChangeForm" class="activation-form" novalidate>
+        <label class="activation-field">
+          <span>Nueva contraseña maestra</span>
+          <input id="newPassword" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres" required />
+        </label>
+        <label class="activation-field">
+          <span>Confirmar contraseña</span>
+          <input id="newPassword2" type="password" autocomplete="new-password" placeholder="Repite la contraseña" required />
+        </label>
+        <button id="passwordChangeSubmit" type="submit" class="primary-button activation-primary">Guardar contraseña</button>
+      </form>
+      <p id="passwordChangeMessage" class="login-error activation-message" role="alert"></p>
+      <button id="passwordChangeCancel" type="button" class="outline-button activation-secondary">Cancelar</button>
+    </dialog>
+
+    <!-- Restablecer el PIN de administrador con la contraseña maestra (necesita internet) -->
+    <dialog id="pinRecoveryDialog" class="small-dialog login-dialog activation-dialog" aria-labelledby="pinRecoveryTitle">
+      <div class="login-brand activation-brand">
+        <p class="eyebrow">NexoPos</p>
+        <h2 id="pinRecoveryTitle">Restablecer PIN</h2>
+        <p class="muted">Confirma la contraseña maestra del negocio para crear un PIN nuevo de administrador.</p>
+      </div>
+      <form id="pinRecoveryForm" class="activation-form" novalidate>
+        <label class="activation-field">
+          <span>Correo electrónico del establecimiento</span>
+          <input id="pinRecoveryEmail" type="email" autocomplete="username" inputmode="email" placeholder="caja@tubar.com" required />
+        </label>
+        <label class="activation-field">
+          <span>Contraseña maestra</span>
+          <input id="pinRecoveryPassword" type="password" autocomplete="current-password" placeholder="••••••••" required />
+        </label>
+        <div class="two-fields">
+          <label class="activation-field"><span>Nuevo PIN</span><input id="pinRecoveryPin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="4 números" required /></label>
+          <label class="activation-field"><span>Confirmar PIN</span><input id="pinRecoveryPin2" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="4 números" required /></label>
+        </div>
+        <p id="pinRecoveryMessage" class="login-error activation-message" role="alert"></p>
+        <button id="pinRecoverySubmit" type="submit" class="primary-button activation-primary">Restablecer PIN y entrar</button>
+        <button id="pinRecoveryForgotPassword" type="button" class="text-add-button activation-forgot">¿También olvidaste la contraseña maestra?</button>
+        <button type="button" class="outline-button activation-secondary" data-close="pinRecoveryDialog">Cancelar</button>
+      </form>
+    </dialog>
+
+    <dialog id="sessionDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow" id="sessionRole">ROL</p><h2 id="sessionName">Usuario</h2></div><button class="icon-button" data-close="sessionDialog" aria-label="Cerrar">×</button></div>
+      <div class="stack-buttons"><button id="changePinButton" class="outline-button full">Cambiar mi PIN</button><button id="logoutButton" class="primary-button full">Cerrar sesión</button></div>
+    </dialog>
+
+    <dialog id="pinDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">SEGURIDAD</p><h2>Cambiar PIN</h2></div><button id="pinDialogClose" class="icon-button" data-close="pinDialog" aria-label="Cerrar">×</button></div>
+      <p id="pinForcedNote" class="invoice-warning" hidden>Por seguridad debes elegir un PIN personal antes de continuar.</p>
+      <label class="field-label" for="newPin">Nuevo PIN (4 números)</label><input id="newPin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" />
+      <label class="field-label" for="confirmPin">Confirmar PIN</label><input id="confirmPin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" />
+      <button id="savePinButton" class="primary-button full">Guardar PIN</button>
+    </dialog>
+
+    <dialog id="userDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">EQUIPO</p><h2 id="userDialogTitle">Nuevo usuario</h2></div><button class="icon-button" data-close="userDialog" aria-label="Cerrar">×</button></div>
+      <label class="field-label" for="userName">Nombre</label><input id="userName" type="text" placeholder="Ej. Laura" />
+      <label class="field-label" for="userRole">Rol</label><select id="userRole"><option value="mesero">Mesero</option><option value="cajero">Cajero</option><option value="admin">Administrador</option></select>
+      <label class="field-label" for="userPin" id="userPinLabel">PIN de 4 dígitos</label><input id="userPin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" />
+      <label class="check-row"><input type="checkbox" id="userActive" checked /> Usuario activo</label>
+      <p class="muted">Quien recibe un PIN nuevo deberá cambiarlo en su primer ingreso.</p>
+      <button id="saveUserButton" class="primary-button full">Guardar usuario</button>
+    </dialog>
+
+    <dialog id="invoiceDialog" class="small-dialog invoice-dialog">
+      <div class="dialog-header"><div><p class="eyebrow" id="invoiceDialogNo">FACTURA</p><h2>Corregir factura</h2></div><button class="icon-button" data-close="invoiceDialog" aria-label="Cerrar">×</button></div>
+      <p id="invoiceWarning" class="invoice-warning" hidden></p>
+      <div class="two-fields"><div><label class="field-label" for="invoiceCustomer">Mesa o cliente</label><input id="invoiceCustomer" type="text" /></div><div><label class="field-label" for="invoiceMethodEdit">Medio de pago</label><select id="invoiceMethodEdit"></select></div></div>
+      <div id="invoiceTendersBox" class="invoice-tenders-box" hidden><p class="field-label">Desglose del pago mixto (debe sumar el nuevo total)</p><div id="invoiceTenders" class="invoice-tenders"></div><button id="invoiceAddTender" class="outline-button" type="button">+ Agregar medio</button><p id="invoiceTendersStatus" class="muted"></p></div>
+      <p class="field-label">Productos · cantidad · precio unitario</p><div id="invoiceLines" class="invoice-lines"></div>
+      <div class="invoice-add"><select id="invoiceAddProduct" aria-label="Producto a agregar"></select><button id="invoiceAddButton" class="outline-button">+ Agregar</button></div>
+      <div class="dialog-total"><span>Nuevo total</span><strong id="invoiceNewTotal">$0</strong></div>
+      <p class="muted" id="invoiceDiff"></p>
+      <p class="muted">El inventario se ajusta solo con la diferencia de cantidades.</p>
+      <label class="field-label" for="invoiceReason">Motivo de la corrección (obligatorio)</label><input id="invoiceReason" type="text" placeholder="Ej. Se cobró una cerveza de más" />
+      <button id="saveInvoiceButton" class="primary-button full">Guardar corrección</button>
+    </dialog>
+
+    <dialog id="invoiceDeleteDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">FACTURAS</p><h2>Eliminar factura</h2></div><button class="icon-button" data-close="invoiceDeleteDialog" aria-label="Cerrar">×</button></div>
+      <div id="invoiceDeleteSummary" class="invoice-delete-summary"></div>
+      <label class="check-row"><input type="checkbox" id="invoiceRestoreStock" checked /> Devolver los productos al inventario</label>
+      <label class="field-label" for="invoiceDeleteReason">Motivo (obligatorio)</label><input id="invoiceDeleteReason" type="text" placeholder="Ej. Factura duplicada por error" />
+      <p class="muted">La factura desaparece de reportes y caja, pero queda una copia completa en la bitácora.</p>
+      <button id="confirmDeleteInvoiceButton" class="danger-button full">Eliminar factura</button>
+    </dialog>
+
+    <dialog id="supplierDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">COMPRAS</p><h2 id="supplierDialogTitle">Nuevo proveedor</h2></div><button class="icon-button" data-close="supplierDialog" aria-label="Cerrar">×</button></div>
+      <label class="field-label" for="supplierName">Nombre o razón social</label><input id="supplierName" type="text" />
+      <div class="two-fields"><div><label class="field-label" for="supplierNit">NIT o cédula</label><input id="supplierNit" type="text" /></div><div><label class="field-label" for="supplierPhone">Teléfono</label><input id="supplierPhone" type="tel" /></div></div>
+      <label class="field-label" for="supplierNotes">Notas</label><input id="supplierNotes" type="text" placeholder="Ej. Entrega martes y viernes" />
+      <button id="saveSupplierButton" class="primary-button full">Guardar proveedor</button>
+    </dialog>
+
+    <dialog id="wasteDialog" class="small-dialog waste-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">INVENTARIO</p><h2>Registrar Ajuste / Merma</h2></div><button class="icon-button" data-close="wasteDialog" aria-label="Cerrar">×</button></div>
+      <p class="muted">Descuenta existencias del stock con justificación contable ($0 de venta, sin alterar arqueo de caja).</p>
+      <label class="field-label" for="wasteItem">Producto activo</label><select id="wasteItem"></select>
+      <div class="two-fields"><div><label class="field-label" for="wasteQty">Cantidad a descontar</label><input id="wasteQty" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0" /></div><div><label class="field-label" for="wasteReason">Motivo</label><select id="wasteReason"><option value="Rotura / Merma">Rotura / Merma</option><option value="Cortesía de la casa">Cortesía de la casa</option><option value="Consumo de personal">Consumo de personal</option><option value="Otro ajuste">Otro ajuste</option></select></div></div>
+      <label class="field-label" for="wasteNote">Observación o nota (opcional)</label><input id="wasteNote" type="text" placeholder="Ej. Botella rota en barra, cortesía mesa 4..." />
+      <div id="wasteValueBox" class="waste-value-box"><p id="wasteValue" class="muted"></p></div>
+      <button id="saveWasteButton" class="primary-button full">Guardar ajuste y descontar stock</button>
+    </dialog>
+
+    <dialog id="countDialog" class="small-dialog count-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">INVENTARIO</p><h2>Conteo físico</h2></div><button class="icon-button" data-close="countDialog" aria-label="Cerrar">×</button></div>
+      <p class="muted">Escribe lo que realmente hay en la barra y la bodega. Lo que dejes en blanco no se toca.</p>
+      <div class="count-table-wrap"><table><thead><tr><th>Insumo</th><th>Sistema</th><th>Contado</th><th>Diferencia</th></tr></thead><tbody id="countBody"></tbody></table></div>
+      <div class="dialog-total"><span>Diferencia valorizada</span><strong id="countTotal">$0</strong></div>
+      <label class="field-label" for="countNote">Nota del conteo</label><input id="countNote" type="text" placeholder="Ej. Conteo de cierre del sábado" />
+      <button id="applyCountButton" class="primary-button full">Aplicar conteo y ajustar inventario</button>
+    </dialog>
+
+    <dialog id="purchaseSuggestDialog" class="small-dialog purchase-suggest-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">COMPRAS Y PROVEEDORES</p><h2>Sugerido de compra</h2></div><button class="icon-button" data-close="purchaseSuggestDialog" aria-label="Cerrar">×</button></div>
+      <p class="muted">Productos que requieren reposición inmediata (stock bajo o agotado) frente al nivel mínimo configurado.</p>
+      <div id="suggestedItemsList" class="suggested-items-list"></div>
+      <div class="dialog-actions-vertical">
+        <button id="copyPurchaseOrderButton" class="primary-button full">Copiar pedido al portapapeles</button>
+      </div>
+    </dialog>
+
+    <dialog id="closeSuccessDialog" class="small-dialog close-success-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">CIERRE DE CAJA</p><h2>Turno cerrado</h2></div><button class="icon-button" data-close="closeSuccessDialog" aria-label="Cerrar">×</button></div>
+      <div id="closeSuccessWatermarkTop" class="demo-watermark-tag" hidden>DOCUMENTO DE DEMOSTRACIÓN — NETXPREMIUM</div>
+      <div id="closeSuccessContent" class="close-success-content"></div>
+      <div id="closeSuccessWatermarkBottom" class="demo-watermark-tag" hidden>DOCUMENTO DE DEMOSTRACIÓN — NETXPREMIUM</div>
+      <div class="stack-buttons">
+        <button id="sendCloseWhatsappBtn" class="whatsapp-button full">📲 Enviar Resumen por WhatsApp</button>
+        <button id="printCloseZBtn" class="outline-button full">🖨 Imprimir Ticket Z</button>
+        <button class="outline-button full" data-close="closeSuccessDialog">Aceptar y finalizar</button>
+      </div>
+    </dialog>
+
+    <dialog id="importProductsDialog" class="small-dialog import-products-dialog">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">CATÁLOGO E INVENTARIO</p>
+          <h2>Importar Productos Masivo</h2>
+        </div>
+        <button class="icon-button" data-close="importProductsDialog" aria-label="Cerrar">×</button>
+      </div>
+
+      <p class="muted">
+        Carga un archivo Excel (.xlsx, .xls) o CSV con tu catálogo de productos e inventario.
+        <a href="#" id="importDialogTemplateLink" class="template-link" style="color:var(--accent);text-decoration:underline;margin-left:4px;font-weight:600;">Descargar plantilla modelo</a>
+      </p>
+
+      <div id="importDropZone" class="import-drop-zone">
+        <input type="file" id="importProductFileInput" accept=".xlsx,.xls,.csv" hidden />
+        <svg class="drop-zone-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <line x1="12" y1="18" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <polyline points="9 15 12 12 15 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p class="drop-zone-title"><strong>Arrastra tu archivo aquí</strong> o haz clic para seleccionarlo</p>
+        <span class="drop-zone-hint">Formatos soportados: Excel (.xlsx, .xls) o CSV (.csv)</span>
+      </div>
+
+      <div id="importFileDetails" class="import-file-details" hidden>
+        <div class="file-info-chip">
+          <span class="file-icon">📄</span>
+          <div class="file-texts">
+            <strong id="importFileName">archivo.xlsx</strong>
+            <span id="importFileSize" class="muted">0 KB</span>
+          </div>
+          <button type="button" id="importRemoveFileBtn" class="remove-file-btn" title="Quitar archivo">×</button>
+        </div>
+      </div>
+
+      <div class="import-options">
+        <label class="check-row">
+          <input type="checkbox" id="importUpdateExisting" checked />
+          Actualizar productos existentes si coincide el nombre o código
+        </label>
+        <p class="muted import-note">Las existencias negativas se importan como 0 y las filas con precio de venta en $0 se omiten (mismas reglas que el formulario de productos).</p>
+      </div>
+
+      <div id="importErrorAlert" class="import-error-alert" hidden></div>
+
+      <div id="importPreviewContainer" class="import-preview-container" hidden>
+        <div class="import-summary-badges">
+          <span class="summary-pill total">Total filas: <strong id="importSummaryTotal">0</strong></span>
+          <span class="summary-pill new">Nuevos: <strong id="importSummaryNew">0</strong></span>
+          <span class="summary-pill update">Actualizar: <strong id="importSummaryUpdate">0</strong></span>
+          <span class="summary-pill warning" id="importSummaryWarningWrap">Omitidos: <strong id="importSummaryWarning">0</strong></span>
+        </div>
+
+        <div class="import-table-wrap">
+          <table class="import-preview-table">
+            <thead>
+              <tr>
+                <th>Estado</th>
+                <th>Producto</th>
+                <th>Categoría</th>
+                <th>Costo</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th>Mín.</th>
+                <th>Unidad</th>
+                <th>Código</th>
+              </tr>
+            </thead>
+            <tbody id="importPreviewBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="dialog-actions-spread">
+        <button type="button" class="outline-button" data-close="importProductsDialog">Cancelar</button>
+        <button type="button" id="confirmImportBtn" class="primary-button" disabled>
+          Confirmar e Importar
+        </button>
+      </div>
+    </dialog>
+
+    <dialog id="demoLimitDialog" class="small-dialog obsidian-modal">
+      <div class="obsidian-modal-header">
+        <div>
+          <span class="obsidian-badge">⚡ MODO DEMO</span>
+          <h2 class="obsidian-title">Tope de prueba alcanzado</h2>
+        </div>
+        <button class="icon-button" data-close="demoLimitDialog" aria-label="Cerrar">×</button>
+      </div>
+      <div class="obsidian-modal-body">
+        <div class="obsidian-icon-glow">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+        </div>
+        <p class="obsidian-message">
+          Has alcanzado el límite de prueba interactiva de NexoPos. Para operar sin límites, sincronizar cajas en tiempo real y habilitar hardware de impresión, adquiere tu sistema con <strong>Netxpremium</strong>.
+        </p>
+        <div class="obsidian-actions">
+          <a id="demoWhatsappBtn" href="https://wa.me/?text=Hola%20Netxpremium,%20he%20alcanzado%20el%20l%C3%ADmite%20de%20prueba%20interactiva%20de%20NexoPos%20y%20deseo%20adquirir%20el%20sistema%20completo." target="_blank" rel="noopener noreferrer" class="obsidian-wa-btn">
+            <span>📲 Adquirir Sistema con Netxpremium</span>
+          </a>
+          <button type="button" class="obsidian-close-btn" data-close="demoLimitDialog">Seguir explorando la demo</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Función del Plan Pro (planes.js → showUpgradeDialog) -->
+    <dialog id="planUpgradeDialog" class="small-dialog obsidian-modal" aria-labelledby="planUpgradeTitle">
+      <div class="obsidian-modal-header">
+        <div>
+          <span class="obsidian-badge">🔒 PLAN PRO</span>
+          <h2 id="planUpgradeTitle" class="obsidian-title">Mejora tu plan a PRO</h2>
+        </div>
+        <button class="icon-button" data-close="planUpgradeDialog" aria-label="Cerrar">×</button>
+      </div>
+      <div class="obsidian-modal-body">
+        <div class="obsidian-icon-glow">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1a5 5 0 0 0-5 5v4H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm-3 9V6a3 3 0 0 1 6 0v4H9z"/></svg>
+        </div>
+        <p class="obsidian-message"><strong id="planUpgradeFeature">Función del Plan Pro</strong></p>
+        <p id="planUpgradeMessage" class="obsidian-message"></p>
+        <ul class="plan-upgrade-list">
+          <li>Mesas ilimitadas y mapa interactivo del salón</li>
+          <li>Valoración de inventario y exportación a Excel/PDF</li>
+          <li>Utilidad neta, rentabilidad y control de gastos</li>
+          <li>Varios usuarios con roles y permisos</li>
+          <li>Soporte prioritario por WhatsApp</li>
+        </ul>
+        <div class="obsidian-actions">
+          <a id="planUpgradeWhatsapp" href="https://wa.me/" target="_blank" rel="noopener noreferrer" class="obsidian-wa-btn"><span>📲 Pasar al Plan Pro · $89.990/mes</span></a>
+          <button type="button" class="obsidian-close-btn" data-close="planUpgradeDialog">Ahora no</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Suscripción suspendida (negocios.activo = false): bloquea el POS, no se puede cerrar -->
+    <dialog id="suspendedDialog" class="small-dialog obsidian-modal suspended-dialog" aria-labelledby="suspendedTitle">
+      <div class="obsidian-modal-header">
+        <div>
+          <span id="suspendedBadge" class="obsidian-badge is-danger">Cuenta suspendida</span>
+          <h2 id="suspendedTitle" class="obsidian-title">Suscripción suspendida</h2>
+        </div>
+      </div>
+      <div class="obsidian-modal-body">
+        <div class="obsidian-icon-glow is-danger">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1a5 5 0 0 0-5 5v4H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm-3 9V6a3 3 0 0 1 6 0v4H9z"/></svg>
+        </div>
+        <p id="suspendedMessage" class="obsidian-message">Suscripción suspendida. <strong>Comunícate con soporte para reactivar tu cuenta.</strong></p>
+        <p class="obsidian-message suspended-note">Tus datos están guardados en este equipo y no se han borrado.</p>
+        <div class="obsidian-actions">
+          <button id="suspendedRetry" type="button" class="obsidian-close-btn">Ya la reactivé · Verificar de nuevo</button>
+          <button id="suspendedBackup" type="button" class="outline-button suspended-backup">Descargar respaldo de mis datos</button>
+          <p id="suspendedNote" class="suspended-note" role="status"></p>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Mover / unir mesas: libres = traslado directo · ocupadas = unir cuentas -->
+    <dialog id="moveOrderDialog" class="small-dialog move-order-dialog" aria-labelledby="moveOrderHeading">
+      <div class="dialog-header"><div><p class="eyebrow">Mover / unir cuenta</p><h2 id="moveOrderHeading"><span id="moveOrderTitle">Mesa</span></h2></div><button class="icon-button" data-close="moveOrderDialog" aria-label="Cerrar">×</button></div>
+      <h3 class="move-section-title"><span class="move-dot free"></span>Mesas libres <small>· traslado directo</small></h3>
+      <div id="moveOrderFree" class="move-table-grid"></div>
+      <h3 class="move-section-title"><span class="move-dot occupied"></span>Mesas ocupadas <small>· unir cuentas</small></h3>
+      <div id="moveOrderOccupied" class="move-table-grid"></div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" popover="manual"></div>
+
+    <!-- Cajón de navegación móvil -->
+    <div id="mobileMenuOverlay" class="mobile-overlay" aria-hidden="true"></div>
+    <aside id="mobileDrawer" class="mobile-drawer mobile-menu drawer-content" aria-hidden="true">
+      <div class="mobile-drawer-header">
+        <span id="mobileDrawerBrand">NexoPos</span>
+        <button id="btn-close-drawer" class="mobile-drawer-close" aria-label="Cerrar menú">&#10005;</button>
+      </div>
+      <nav class="mobile-nav" aria-label="Navegación móvil">
+        <button class="nav-link active" data-view="pos" data-perm="view.pos"><span>&#127974;</span> Punto de venta</button>
+        <button class="nav-link" data-view="invoices" data-perm="view.invoices"><span>&#128196;</span> Facturas</button>
+        <button class="nav-link" data-view="products" data-perm="view.products"><span>&#127865;</span> Productos</button>
+        <button class="nav-link" data-view="inventory" data-perm="view.inventory"><span>&#128230;</span> Inventario</button>
+        <button class="nav-link" data-view="purchases" data-perm="view.purchases"><span>&#128722;</span> Compras y gastos</button>
+        <button class="nav-link" data-view="reports" data-perm="view.reports"><span>&#128202;</span> Reportes</button>
+        <button class="nav-link" data-view="profile" data-perm="view.profile"><span>&#127960;</span> Mi negocio</button>
+        <button class="nav-link" data-view="team" data-perm="view.team"><span>&#128101;</span> Equipo</button>
+      </nav>
+      <button id="mobileShiftBtn" class="mobile-shift-bar closed">Caja cerrada</button>
+    </aside>
+    <script src="./demo-mode.js" defer></script>
+    <script src="./planes.js" defer></script>
+    <script src="./storage.js" defer></script>
+    <script src="./modules.js" defer></script>
+    <script src="./sync.js" defer></script>
+    <script src="./import-products.js" defer></script>
+    <script src="./print.js" defer></script>
+    <script src="./app.js" defer></script>
+  </body>
+</html>

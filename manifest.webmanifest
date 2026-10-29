@@ -1,0 +1,10 @@
+{
+  "name": "NexoPos · POS Inteligente para Restaurantes y Cafeterías",
+  "short_name": "NexoPos",
+  "description": "POS Inteligente para Restaurantes y Cafeterías con funcionamiento local y sin conexión.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#181A20",
+  "theme_color": "#12141A",
+  "lang": "es-CO"
+}

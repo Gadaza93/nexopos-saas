@@ -1,0 +1,40 @@
+{
+  "_nota": "Locución por escena. desde/duracion en frames (30 fps), igual que ESCENAS en src/theme.ts; inicio = segundos de silencio antes de hablar dentro de la escena. Gemini TTS no usa SSML: las pausas salen de la puntuación y el tono de la etiqueta de estilo. Una escena puede fijar su propio «modelo» y «estilo» (el cierre usa gemini-2.5-flash-preview-tts porque se agotó la cuota diaria de gemini-3.8-flash-tts; ese modelo entiende el estilo como instrucción en lenguaje natural).",
+  "voz": {
+    "modelo": "gemini-3.8-flash-tts",
+    "nombre": "Puck",
+    "estilo": "[excited]"
+  },
+  "escenas": [
+    {
+      "id": "caos",
+      "desde": 0,
+      "duracion": 240,
+      "inicio": 0.4,
+      "texto": "¿Se cayó el internet en plena hora pico? Mesas esperando… y pedidos perdidos."
+    },
+    {
+      "id": "fortalezas",
+      "desde": 240,
+      "duracion": 300,
+      "inicio": 0.5,
+      "texto": "Con NexoBar, tu bar sigue vendiendo. Funciona cien por ciento sin internet, ves tus mesas en tiempo real y las comandas llegan a la barra sin retrasos."
+    },
+    {
+      "id": "interfaz",
+      "desde": 540,
+      "duracion": 210,
+      "inicio": 0.3,
+      "texto": "Cobra en segundos, cuadra la caja al peso y, cuando vuelve la red, todo se sincroniza solo."
+    },
+    {
+      "id": "cierre",
+      "desde": 750,
+      "duracion": 150,
+      "inicio": 0.3,
+      "modelo": "gemini-2.5-flash-preview-tts",
+      "estilo": "Dilo con mucho entusiasmo, como locutor de comercial de radio:",
+      "texto": "NexoBar. Tu bar no se detiene, ¡tu sistema tampoco! ¡Prueba la demo!"
+    }
+  ]
+}

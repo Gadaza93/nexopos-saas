@@ -1,0 +1,24 @@
+{
+  "name": "comercial-nexobar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Video publicitario vertical (9:16) de NexoBar renderizado con Remotion",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "voz": "node scripts/generar-voz.mjs",
+    "render": "remotion render src/index.ts ComercialNexoBar out/video.mp4 --codec=h264 --crf=18",
+    "render:final": "npm run voz && remotion render src/index.ts ComercialNexoBar out/comercial.mp4 --codec=h264 --crf=18",
+    "still": "remotion still src/index.ts ComercialNexoBar out/portada.png --frame=820",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.534",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.534"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  }
+}

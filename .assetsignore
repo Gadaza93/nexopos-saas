@@ -1,0 +1,20 @@
+# Cloudflare sube como sitio web todo lo que está en la raíz (wrangler.json → assets.directory ".").
+# Aquí se excluye lo que no es de la PWA: dependencias, instalador de Windows, Electron, pruebas y configuración.
+.git
+.gitignore
+.claude
+.assetsignore
+node_modules
+dist
+build
+electron
+scratch
+main.js
+preload.js
+*.bat
+*.md
+package.json
+package-lock.json
+wrangler.json
+comercial-nexobar
+supabase

@@ -1,0 +1,77 @@
+{
+  "name": "nexopos",
+  "version": "1.1.0",
+  "description": "NexoPos · POS Inteligente para Restaurantes y Cafeterías con funcionamiento 100% offline y sincronización en la nube",
+  "main": "main.js",
+  "author": "NexoPos",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "electron:start": "electron .",
+    "electron:build": "electron-builder --win",
+    "dist": "electron-builder --win",
+    "build": "echo Compilación web lista",
+    "test": "node --require ./scratch/setup-pruebas.js --test --test-concurrency=1 \"scratch/test-*.js\""
+  },
+  "devDependencies": {
+    "@electron/fuses": "2.1.3",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "co.nexopos.pos",
+    "productName": "NexoPos",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "electron/**",
+      "index.html",
+      "app.js",
+      "demo-mode.js",
+      "planes.js",
+      "storage.js",
+      "modules.js",
+      "sync.js",
+      "import-products.js",
+      "print.js",
+      "xlsx.full.min.js",
+      "supabase.min.js",
+      "theme.css",
+      "styles.css",
+      "design.css",
+      "manifest.webmanifest",
+      "build/icon.png",
+      "logo.png",
+      "!admin.html",
+      "!admin.js",
+      "!admin.css"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NexoPos",
+      "deleteAppDataOnUninstall": false,
+      "language": "3082"
+    },
+    "afterPack": "build/after-pack-fuses.js"
+  }
+}

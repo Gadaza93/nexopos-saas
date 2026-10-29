@@ -1,0 +1,116 @@
+/* NexoPos · Panel SuperAdmin SaaS (solo admin.html)
+   Se carga después de theme.css / styles.css / design.css y reutiliza sus tokens y componentes
+   (.stats-grid, .stat-card, .primary-button, .outline-button, .activation-*). Sin colores hex nuevos. */
+
+.admin-body { min-height: 100vh; background: var(--bg); font-family: var(--font-ui); }
+.admin-booting { display: grid; place-items: center; min-height: 100vh; margin: 0; }
+
+/* ---------- Login ---------- */
+.admin-login { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: radial-gradient(55% 45% at 50% 28%, var(--accent-soft), transparent 70%), var(--ink); }
+.admin-login[hidden], .admin-app[hidden] { display: none; }
+.admin-login-card { width: min(420px, 100%); padding: 32px 28px 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 26px; box-shadow: var(--shadow); text-align: center; }
+
+/* ---------- Cabecera ---------- */
+.admin-app { min-height: 100vh; }
+.admin-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 32px; background: var(--ink); border-bottom: 1px solid var(--ink-line); color: var(--on-ink); }
+.admin-header-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.admin-header-brand .brand-mark { width: 48px; height: 48px; max-width: none; padding: 5px; border-radius: 14px; flex: 0 0 auto; }
+.admin-header .eyebrow { margin: 0; color: var(--accent); letter-spacing: .08em; }
+.admin-header h1 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; color: var(--on-ink); }
+.admin-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-header .outline-button { color: var(--on-ink); border-color: var(--ink-line); padding: 0 16px; }
+.admin-header .outline-button:hover { color: var(--accent); }
+.admin-who { font-size: 12px; color: var(--on-ink-2); }
+
+/* ---------- Contenido ---------- */
+.admin-main { max-width: 1280px; margin: 0 auto; padding: 28px 32px 48px; }
+.admin-stats { grid-auto-flow: column; }
+.admin-stats .stat-card span { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
+.admin-stats .stat-card strong { display: block; }
+.admin-stats .stat-card small { color: var(--muted); font-size: 12px; }
+
+.admin-table-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-sm); overflow: hidden; }
+.admin-table-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+.admin-table-head h2 { margin: 0; font-size: 17px; }
+.admin-table-head p { margin: 0; font-size: 12px; }
+.admin-table-wrap { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
+.admin-table th { text-align: left; padding: 11px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+.admin-table td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.admin-table tbody tr:last-child td { border-bottom: 0; }
+.admin-table tbody tr:hover td { background: var(--surface-2); }
+.admin-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.admin-table .actions { text-align: right; }
+.admin-table tr.is-suspended-row td:not(.actions) { opacity: .7; }
+.admin-empty { text-align: center; padding: 34px 16px !important; color: var(--muted); }
+.admin-id { font-size: 12px; color: var(--text-2); background: var(--surface-2); padding: 3px 7px; border-radius: 6px; }
+.admin-plan { display: inline-block; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); border: 1px solid var(--accent-line); color: var(--accent-ink); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ---------- Badges y vencimiento ---------- */
+.admin-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; font-style: normal; letter-spacing: .05em; text-transform: uppercase; border: 1px solid currentColor; }
+.admin-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.admin-badge.is-active { color: var(--success); background: var(--success-soft); }
+.admin-badge.is-suspended { color: var(--danger); background: var(--danger-soft); }
+.admin-expiry { display: inline-flex; flex-direction: column; line-height: 1.25; white-space: nowrap; }
+.admin-expiry small { font-size: 11px; color: var(--muted); }
+.admin-expiry.is-warn small { color: var(--warn); font-weight: 700; }
+.admin-expiry.is-danger, .admin-expiry.is-danger small { color: var(--danger); font-weight: 700; }
+
+/* ---------- Acciones ---------- */
+.admin-actions { display: inline-flex; align-items: center; gap: 10px; }
+.admin-small { min-height: 34px; padding: 0 12px; font-size: 12px; white-space: nowrap; }
+.admin-small:disabled, .admin-switch:disabled { opacity: .55; cursor: progress; }
+.admin-switch { display: inline-flex; align-items: center; gap: 8px; padding: 4px; border: 0; background: transparent; color: var(--text-2); font-size: 12px; font-weight: 700; }
+.admin-switch-track { position: relative; width: 40px; height: 22px; border-radius: 22px; background: var(--danger-soft); border: 1px solid var(--danger); transition: background .15s, border-color .15s; }
+.admin-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--danger); transition: transform .15s, background .15s; }
+.admin-switch[aria-checked="true"] .admin-switch-track { background: var(--success-soft); border-color: var(--success); }
+.admin-switch[aria-checked="true"] .admin-switch-thumb { transform: translateX(18px); background: var(--success); }
+.admin-switch-label { min-width: 74px; text-align: left; }
+
+@media (max-width: 900px) { .admin-stats { grid-auto-flow: row; grid-template-columns: 1fr 1fr; } }
+@media (max-width: 768px) {
+  .admin-header { padding: 12px 16px; flex-wrap: wrap; }
+  .admin-header h1 { font-size: 18px; }
+  .admin-who { display: none; }
+  .admin-main { padding: 18px 16px 36px; }
+  .admin-login-card { padding: 26px 18px 20px; }
+}
+
+/* ---------- Alta de negocio (modales) ---------- */
+.admin-dialog { width: min(520px, 94vw); text-align: left; }
+.admin-dialog::backdrop { background: rgba(4, 7, 12, 0.72); backdrop-filter: blur(4px); }
+.admin-dialog .dialog-header h2 { margin: 2px 0 0; font-family: var(--font-display); font-size: 21px; }
+.admin-dialog .eyebrow { margin: 0; color: var(--accent); letter-spacing: .08em; }
+.admin-dialog .activation-field input, .admin-dialog .activation-field select { width: 100%; min-height: 44px; padding: 0 12px; font-size: 14px; border-radius: var(--r-sm); }
+.admin-input-row { display: flex; gap: 8px; align-items: stretch; }
+.admin-input-row input { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; letter-spacing: .04em; }
+.admin-input-row .admin-small { min-height: 44px; }
+.admin-two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.admin-hint { margin: 0; font-size: 11px; font-weight: 500; color: var(--muted); }
+.admin-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+.admin-dialog-actions .primary-button, .admin-dialog-actions .outline-button { padding: 0 18px; }
+.admin-dialog-actions button:disabled { opacity: .6; cursor: progress; }
+.admin-created-intro { margin: 0 0 14px; font-size: 13px; }
+.admin-credentials { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0 0 12px; padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 13px; }
+.admin-credentials dt { color: var(--muted); font-weight: 600; }
+.admin-credentials dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.admin-credentials dd.is-secret { font-family: ui-monospace, Consolas, monospace; color: var(--accent-ink); letter-spacing: .04em; }
+.admin-header .primary-button { padding: 0 16px; }
+@media (max-width: 768px) {
+  .admin-two-fields { grid-template-columns: 1fr; }
+  .admin-dialog-actions { flex-direction: column-reverse; }
+  .admin-dialog-actions button { width: 100%; }
+}
+/* styles.css da margin-bottom a los campos de .small-dialog (modales del POS); aquí el espaciado lo pone el grid */
+.admin-dialog input, .admin-dialog select { margin-bottom: 0; }
+.admin-input-row { align-items: center; }
+.admin-input-row .admin-small { height: 44px; padding: 0 14px; }
+
+/* Eliminar negocio */
+.admin-delete-action { color: var(--danger); border-color: var(--danger-soft); }
+.admin-delete-action:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
+.admin-dialog .admin-danger-eyebrow { color: var(--danger); }
+.admin-delete-warning { margin: 0; padding: 12px 14px; border-radius: var(--r-sm); background: var(--danger-soft); border: 1px solid var(--danger); color: var(--text); font-size: 14px; line-height: 1.5; }
+.admin-delete-summary { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.admin-danger-button { background: var(--danger); border-color: var(--danger); color: var(--text); }
+.admin-danger-button:disabled { opacity: .45; cursor: not-allowed; }

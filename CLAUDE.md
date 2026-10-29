@@ -1,0 +1,139 @@
+# NexoPos
+
+POS para restaurantes y cafeterías (derivado de NexoBar, el POS para bares; antes "Brasa POS"), en español de Colombia (`es-CO`, pesos sin decimales). Funciona 100% sin conexión y sincroniza con Supabase cuando hay internet. La marca y todas las claves internas (IndexedDB `nexopos`, `nexopos-auth`, `nexopos_default`, archivo espejo `nexopos.json`, respaldos `nexopos-respaldo-*`, appId `co.nexopos.pos`) son distintas de NexoBar para que ambas apps puedan convivir en el mismo equipo.
+
+## Reglas técnicas
+
+- **Vanilla JS puro.** Sin frameworks, sin TypeScript, sin bundlers, transpiladores ni paso de build. Los archivos `.js` se sirven tal cual con `<script>` clásicos (no módulos ES): las funciones de nivel superior son globales y se comparten entre archivos. No introducir `import`/`export`, npm runtime deps ni herramientas de compilación.
+- Sin dependencias externas en tiempo de ejecución: `xlsx.full.min.js` y `supabase.min.js` están vendorizados en la raíz. `supabase.min.js` es el build UMD de `@supabase/supabase-js` **2.117.3** (`dist/umd/supabase.js` del tarball de npm, integridad verificada; sha256 `d6a5c4414a5d4ce646d9c1de223aa7067d3ff664c15394ffeb7fcffc763354a3`). Para actualizarlo, repetir ese proceso con una versión fija y actualizar esta línea. No volver a cargar scripts desde un CDN: la CSP lo bloquea.
+- **CSP** (meta en `index.html` y `admin.html`): `script-src 'self'` + el hash del script del tema. Si cambias ese script en línea, recalcula su hash (`sha256-…` de su contenido exacto) en ambos archivos y en `_headers` (cabeceras de Cloudflare). Nada de `<script>` en línea nuevos, atributos `on*=` ni `eval`.
+- Los scripts también se cargan en Node para las pruebas de `scratch/`: protege el acceso a `window`, `document`, `navigator` y `localStorage` con `typeof … !== 'undefined'` o `try/catch`.
+- Comentarios y textos de interfaz en español.
+
+## Arquitectura offline-first
+
+- **Fuente de verdad local.** El estado completo (`state` en `app.js`) se guarda en **IndexedDB** (`storage.js`, base `brasa-pos`, store `kv`, clave `state`). Migra automáticamente desde `localStorage` (`brasa-pos-v1`) de versiones antiguas. No renombrar la base ni las claves: se perderían datos de clientes existentes.
+- **Historial partido por mes.** En IndexedDB, `state` es solo el núcleo: ventas, gastos y compras van en claves `hist:<colección>:<AAAA-MM>` (`guardarParticionado` / `cargarParticionado` en `storage.js`), escritas en la misma transacción. En memoria `state` sigue completo. Cada guardado escribe el núcleo y los meses recientes; un mes viejo solo si cambia su resumen (cantidad, total, pendientes, ids). Si editas en el lugar un registro antiguo sin cambiar esos datos, llama a `marcarHistorialModificado(colección, registro)`; la revisión completa (cada 10 min y al ocultar o cerrar la app) es solo la red de seguridad. **No instalar versiones anteriores a este cambio**: leerían el núcleo con el historial vacío. Prueba: `scratch/test-storage-particionado.js`.
+- **Ventana de 90 días en memoria (solo ventas).** Al arrancar, los meses de ventas anteriores a `historialVentanaDesde()` (primer día del mes de hace `histVentanaDias` = 90 días) y sin nada pendiente de subir se quedan solo en IndexedDB (`histArchivo`); el núcleo guarda `__historialInfo` (resumen y firma de cada mes) para decidirlo sin leerlos. **Nunca se borran**: siguen en `__historial`, los respaldos los incluyen (`estadoCompleto()` en `runBackup` y `exportBackup`) y `asegurarHistorial(desde)` los trae cuando un filtro pide una fecha anterior (fecha de Facturas o «todas», fecha de Reportes, rango personalizado de Utilidad neta). Toda vista nueva que consulte fechas viejas debe llamarlo y volver a dibujar si devuelve más de 0. Si llega a memoria un registro de un mes archivado, `guardarParticionado` trae el mes entero antes de escribirlo. Restaurar un respaldo llama a `descartarArchivoHistorial()` antes de reemplazar `state`. La descarga de ventas pide solo `fecha >= historialVentanaDesde()` y no borra ventas locales anteriores: un equipo nuevo recibe solo los últimos meses (el resto sigue en la nube). Gastos y compras no se archivan.
+- **Ventas sin subir: avisos.** `NexoSync.pendingSummary()` cuenta ventas, gastos y compras pendientes y la fecha del más antiguo. Sin conexión o sin sesión, el indicador muestra «· N sin subir» y, si el más antiguo pasa de 24 h, un aviso por sesión. En el navegador (no en Windows: allí cancelar `beforeunload` impediría cerrar) se avisa antes de cerrar o recargar con registros pendientes; la tarjeta de almacenamiento advierte si `navigator.storage.persisted()` es falso.
+- **Archivo espejo (solo Windows), por partes.** En Electron se replica en `%APPDATA%\NexoPos\datos\partes\` con las mismas partes que IndexedDB (`state.json` + un archivo por mes, `indice.json` con la firma de cada mes; lógica en `electron/espejo-partes.js`, que usan `main.js` y `electron/main.js`). `escribirEspejo` (cada 20 s como mucho y al cerrar) manda solo las partes que cambiaron, primero los meses y al final el núcleo, cada una atómica con `.bak` horario; la primera vez de la sesión compara con `indice.json` y completa lo que falte, también los meses archivados. Si IndexedDB está vacío, `mirror:load` rearma el estado entero desde las partes o, si no hay, desde el archivo único `nexopos.json` (o el antiguo `brasa-pos.json`), que ya no se actualiza. Con un preload sin `saveMirrorParts` se escribe el archivo único como antes. Respaldos en `Documentos\NexoPos\Respaldos` (o la carpeta legada `BrasaPOS\Respaldos`).
+- **Sincronización diferida (`sync.js`, objeto global `NexoSync`).** Cada registro lleva `sync_status` (`nuevo_local`/`pending` → `synced`). Se suben en lote a Supabase cuando hay conexión (`scheduleSync`, evento `online`) y se descargan con `pullAllFromSupabase`. Los datos del negocio se separan por `business_id` (por defecto `nexopos_default`).
+- **Descargas siempre paginadas.** PostgREST corta en 1000 filas por consulta: nunca leer una tabla con `select()` sin paginar. Usa `fetchAllRows` (tablas pequeñas: productos, proveedores) o `fetchMissingRows` (tablas que crecen: ventas, gastos, mermas; baja solo ids y luego las filas que faltan). Los borrados remotos se aplican localmente solo si la lista de ids llegó completa. Prueba: `scratch/test-pull-pagination.js`.
+- **Pedidos abiertos: `pedidos_activos`, no `negocios`.** Si la tabla tiene la columna `meta` (migración de Supabase: `alter table pedidos_activos add column meta jsonb` + la tabla en la publicación `supabase_realtime`), `usaTablaPedidos` activa el modo tabla: cada pedido viaja como su fila (el pedido completo en `meta`), solo suben los que tienen cambios y `negocios.configuracion` deja de llevar `orders`. Sin la columna se mantiene el modo anterior (`configuracion.orders`). Toda escritura de `negocios.configuracion` pasa por `configuracionNegocio()`. El tiempo real de `pedidos_activos` trae un pedido por evento: se aplica con `mergeRemoteOrders([...], { completa: false })`, nunca como lista completa. Prueba: `scratch/test-pedidos-tabla.js`.
+- **Stock por movimientos, nunca absoluto.** Con la tabla `movimientos_stock` (SQL del paso 10; `usaStockMovimientos` lo detecta) la nube suma y resta: el trigger `ventas_stock` descuenta cada venta nueva o editada (diferencia de cantidades por `productId`) y todo lo demás sube como movimiento con la diferencia. Cada producto guarda `stockSynced` (lo que la nube ya conoce); en cada `syncAll`, `recordStockMovements` calcula stock local − `stockSynced` + vendido en ventas sin subir − movimientos sin subir, así que **ninguna ruta que cambie el stock necesita avisar a la nube**: basta cambiar el insumo de inventario (manda sobre `product.stock`). Lo que llega de la nube (descarga o tiempo real) pasa por `remoteStock`: el stock local se mueve lo mismo que cambió la nube y conserva lo no subido. Cada venta nueva lleva `pendingStock` (`stockItemsQty`) y una factura editada suma su diferencia con `addSaleStockDelta`. El stock puede quedar negativo (vendido de más): no poner tope en 0 al descontar ventas, o la caja y la nube se descuadran. Un producto sin `stockSynced` sube su stock absoluto una sola vez. Sin la tabla rige el modo anterior (stock absoluto). Prueba: `scratch/test-stock-movimientos.js` (dos cajas contra una nube con los triggers: `createMockSupabase({ stockMovimientos: true })`).
+- **Fila `negocios`: solo `actualizarNegocio()`.** En Supabase las cajas solo pueden actualizar `nombre` y `configuracion` (permisos por columna) y no crean filas (las crea `admin_create_negocio`); así un bar no puede tocar `activo`, `plan` ni `fecha_vencimiento`. Nunca `upsert` ni otras columnas: Supabase lo rechaza con 403. `scratch/mock-supabase.js` replica estos permisos.
+- **PIN de administrador sin texto plano.** En la nube solo `admin_salt`, `admin_hash` y `admin_pin_at`; `setUserPin` estampa `pinAt` y al descargar gana el PIN más reciente (`applyAdminPinLocally`). Un PIN de 4 dígitos con su sal se puede probar por fuerza bruta: no es un secreto frente a quien ya tiene acceso técnico a una caja. Prueba: `scratch/test-negocios-permisos.js`.
+- **Funciones por plan (`planes.js`).** El plan es `negocios.plan` (`basico` | `pro`), que solo cambia el superadmin (panel → botón de plan, `admin_update_negocio_status`); llega a `state.subscription.plan` al descargar y en tiempo real (`applySubscriptionStatus` → `enforcePlanSession`). Sin plan conocido, con un valor desconocido o en demo rige el Pro. La tabla `compras` (pagos de la landing) no se lee desde la app: al entregar una compra, el superadmin asigna el plan al negocio.
+  - Básico: hasta `PLAN_MAX_MESAS` (10) mesas **o barras** en total; salón solo en cuadrícula y diseñador sin arrastre; sin utilidad neta, valoración de inventario, exportaciones (Excel/impresión) ni registro de gastos; un solo usuario y solo rol administrador (los demás no inician sesión). Pro: todo.
+  - Para bloquear algo nuevo: agrega la función a `PLAN_FEATURES`, marca el botón con `data-plan-feature="…"` (etiqueta PRO y modal en lugar del clic) **y** valida dentro de la función con `requirePlan(…)` o `planGuard(nombre, función)` en `initModules`: ocultar el botón no basta.
+  - Bajar de plan nunca borra datos: se conservan mesas y usuarios de más, pero no se agregan otros.
+  - En la nube, el trigger `negocios_limite_mesas` (ver Operación de Supabase) impide que el plano de un negocio Básico crezca por encima de 10; los reportes se calculan en el equipo con datos del propio bar, así que su bloqueo es de la app. Prueba: `scratch/test-planes.js`.
+- **Recuperar acceso.** Contraseña maestra: «¿Olvidaste tu contraseña?» en Vincular Terminal (`openRecovery` en `app.js`) → Edge Function `recuperar-acceso` (`supabase/functions/recuperar-acceso/index.ts`, se publica con `verify_jwt = false`) envía por Resend un código de 6 dígitos (15 min, 5 intentos, 3 envíos por correo por hora; en la base solo su HMAC, tabla `recuperaciones_acceso`). Al pedir el código responde lo mismo exista o no el correo: no revelar qué correos son clientes. PIN: «¿Olvidaste tu PIN?» (`openPinRecovery` en `modules.js`) solo para el administrador, con la contraseña maestra del mismo negocio (`activateTerminal`); el PIN nuevo sube con `syncAdminPin`. Meseros y cajeros se lo piden al administrador. Prueba: `scratch/test-recuperar-acceso.js`.
+- **Contraseña temporal obligatoria.** Toda cuenta nueva de un negocio (webhook de Wompi o «Nuevo negocio» del superadmin) nace con `app_metadata.must_change_password = true` (trigger en `auth.users`, paso 11). Con la marca, `get_business_id()` devuelve `''` (el RLS no da datos), `hasAuthSession` responde `false` (no se sincroniza: las listas vacías borrarían el catálogo local) y Vincular Terminal pide la contraseña definitiva antes de vincular (`askNewPassword` en `app.js` → `changeTemporaryPassword`: `auth.updateUser`, `marcar_contrasena_cambiada()` y `refreshSession`, porque el token anterior aún trae la marca). Recuperar la contraseña con el código del correo también la quita. Prueba: `scratch/test-terminal-activation.js`.
+- **Licencia y vencimiento.** El bloqueo vive en `enforceSubscription` (`app.js`) con el modal `#suspendedDialog` (incluye «Descargar respaldo»: nunca secuestrar los datos). Motivos (`licenseBlockReason`): `suspendida` (`negocios.activo = false`), `vencida` (3 días de gracia tras `fecha_vencimiento`), `reloj` (el reloj del equipo retrocedió más de 1 h respecto al máximo visto) y `sin-verificar` (7 días sin verificar en línea). En cada descarga `fetchServerTime` (`sync.js`) lee `hora_servidor()` y `registerLicenseCheck` guarda en `state.subscription` `verifiedAt`, `offsetMs` y `localMax`: el vencimiento se mide con la hora del servidor corregida, nunca con `Date.now()` a secas. `activo = false` bloquea en el acto; lo demás bloquea al arrancar, al iniciar sesión o cuando no hay cuentas abiertas (no corta un servicio a medias). Sin `verifiedAt` (SQL sin aplicar) solo rige `activo`. En la nube, la tarea `nexopos-suspender-vencidos` pone `activo = false` a los 3 días de vencido; renovar (webhook) o «+30 días» en el superadmin reactivan. Prueba: `scratch/test-licencia.js`.
+- **Nunca bloquear la venta por la red.** Toda operación se completa en local primero; los fallos de Supabase solo cambian el indicador de sincronización.
+- **NexoPos (restaurantes/cafeterías) aún no tiene proyecto de Supabase.** El código viene de NexoBar (el POS para bares) y se desconectó de su base (29-10-2026): `SUPABASE_URL`/`SUPABASE_ANON_KEY` en `sync.js` y `admin.js` están vacíos (se leen de `globalThis.NEXO_SUPABASE_URL`/`NEXO_SUPABASE_ANON_KEY`), así que `getClient()` devuelve `null` y todo funciona offline. Nunca volver a poner las credenciales de NexoBar; al crear el proyecto nuevo, poner sus valores ahí. Las pruebas usan un proyecto ficticio desde `scratch/setup-pruebas.js` (`npm test` lo carga con `--require`; para correr una sola: `node -r ./scratch/setup-pruebas.js scratch/test-x.js`). Las secciones de Supabase de abajo describen la base de NexoBar.
+- Si `supabase.min.js` no cargó, `getClient()` devuelve `null`, la app trabaja offline y `loadSupabaseLib()` reintenta desde el mismo archivo local.
+
+## Operación de Supabase (se hace en el panel, no en el código)
+
+El esquema completo no está en el repositorio: estos pasos se aplican a mano en el proyecto de Supabase. Los cambios nuevos van como archivo en `supabase/sql/` (para pegar en el SQL Editor) y las Edge Functions de la app en `supabase/functions/`; la carpeta `supabase` no se publica (`.assetsignore`) ni entra al instalador.
+
+1. **Índices** (SQL Editor; si ya existen no hace nada). Cada página de la descarga paginada es una búsqueda directa:
+   ```sql
+   create index if not exists ventas_negocio_id_idx       on public.ventas (business_id, id);
+   create index if not exists gastos_negocio_id_idx       on public.gastos (business_id, id);
+   create index if not exists mermas_negocio_id_idx       on public.mermas (business_id, id);
+   create index if not exists productos_negocio_id_idx    on public.productos (business_id, id);
+   create index if not exists proveedores_negocio_id_idx  on public.proveedores (business_id, id);
+   create index if not exists pedidos_activos_negocio_idx on public.pedidos_activos (business_id);
+   create index if not exists turnos_caja_negocio_idx     on public.turnos_caja (business_id, estado, created_at desc);
+   ```
+2. **Tiempo real**: la publicación `supabase_realtime` ya incluye `negocios`, `pedidos_activos`, `productos`, `turnos_caja` y `ventas` (28-10-2026). Si se agrega otra tabla que la app escuche en `setupRealtime`, hay que agregarla también aquí.
+3. **Pedidos en tabla propia** — **aplicado el 28-10-2026** (columna `meta` + tabla en el tiempo real). Las versiones anteriores siguen siendo compatibles: leen las columnas normales de `pedidos_activos` y las nuevas leen sus filas sin `meta`. Para un proyecto nuevo de Supabase:
+   ```sql
+   alter table public.pedidos_activos add column if not exists meta jsonb;
+   do $ begin
+     alter publication supabase_realtime add table public.pedidos_activos;
+   exception when duplicate_object then null; end $;
+   ```
+4. **Plan Pro** antes del primer cliente de pago (Organization → Billing). El plan gratuito pausa el proyecto tras una semana sin uso, tiene 500 MB de base de datos y no incluye copias de seguridad descargables.
+5. **Copias de seguridad**: Pro hace una copia diaria automática (Database → Backups). Para poder volver a un minuto exacto, activar el complemento Point in Time Recovery (costo aparte).
+6. **Alertas de uso**: Organization → Billing → dejar activado el *spend cap* hasta conocer el consumo real, y revisar Reports → Database (tamaño y conexiones) y Usage (transferencia) cada mes. Los avisos de uso llegan al correo de facturación configurado en Organization → Billing.
+7. **Límite de mesas del Plan Básico en la nube** — **aplicado el 28-10-2026** (trigger `negocios_limite_mesas`; para un proyecto nuevo, en el SQL Editor). Si una caja sube un plano más grande que 10 y que el que ya había, se conserva el plano anterior y el resto de la configuración se guarda normal (la caja no queda sin sincronizar). El 10 es el mismo `PLAN_MAX_MESAS` de `planes.js`:
+   ```sql
+   create or replace function public.negocios_limite_mesas() returns trigger language plpgsql set search_path = public as $$
+   declare v_max constant int := 10; v_nuevo int; v_anterior int;
+   begin
+     if lower(coalesce(new.plan, '')) not in ('basico', 'básico') then return new; end if;
+     v_nuevo := case when jsonb_typeof(new.configuracion -> 'floorPlan' -> 'tables') = 'array' then jsonb_array_length(new.configuracion -> 'floorPlan' -> 'tables') else 0 end;
+     v_anterior := case when jsonb_typeof(old.configuracion -> 'floorPlan' -> 'tables') = 'array' then jsonb_array_length(old.configuracion -> 'floorPlan' -> 'tables') else 0 end;
+     if v_nuevo > v_max and v_nuevo > v_anterior then
+       if old.configuracion ? 'floorPlan' then new.configuracion := jsonb_set(new.configuracion, '{floorPlan}', old.configuracion -> 'floorPlan');
+       else new.configuracion := new.configuracion - 'floorPlan'; end if;
+     end if;
+     return new;
+   end; $$;
+   revoke all on function public.negocios_limite_mesas() from public, anon, authenticated;
+   drop trigger if exists negocios_limite_mesas on public.negocios;
+   create trigger negocios_limite_mesas before update of configuracion on public.negocios for each row execute function public.negocios_limite_mesas();
+   ```
+8. **Eliminar negocio y recuperar acceso** — `supabase/sql/2026-10-28_eliminar_negocio_y_recuperar_acceso.sql`: `admin_delete_negocio(p_negocio_id, p_confirmacion)` (solo superadmin; la confirmación debe ser el ID; borra en una transacción las 7 tablas con `business_id`, las cuentas de `auth.users` del negocio y la fila de `negocios` — las tablas hijas no tienen llave foránea, así que **toda tabla nueva con `business_id` debe agregarse a esta función**), la tabla `recuperaciones_acceso` y `recuperacion_buscar_cuenta` (solo service_role). La Edge Function `recuperar-acceso` usa los secretos `RESEND_API_KEY` (ya existía) y, opcional, `RECUPERACION_EMAIL_FROM` (por defecto `soporte@netxpremium.com`).
+9. **Vencimiento de la licencia** — **aplicado el 28-10-2026** — `supabase/sql/2026-10-28_licencia_vencimiento.sql`: `hora_servidor()` (solo `authenticated`; la app la usa para el reloj de la licencia) y `suspender_negocios_vencidos()` con la tarea pg_cron `nexopos-suspender-vencidos` (diaria, 15:00 UTC = 10:00 a. m. de Colombia; `activo = false` a los vencidos hace más de 3 días).
+10. **Stock por movimientos** — **aplicado el 28-10-2026** — `supabase/sql/2026-10-28_stock_por_movimientos.sql`: tabla `movimientos_stock` (las cajas solo leen e insertan las de su negocio), triggers `ventas_stock` (ventas insertadas o con ítems editados) y `movimientos_stock_aplicar` (suma el delta a `productos.stock` del mismo negocio), y `admin_delete_negocio` con la tabla nueva. Las cajas con la versión anterior (p. ej. el instalador de Windows sin actualizar) siguen subiendo el stock absoluto: conviene actualizarlas todas.
+11. **Contraseña temporal obligatoria** — **aplicado el 29-10-2026** — `supabase/sql/2026-10-29_cambio_contrasena_obligatorio.sql`: trigger `marcar_contrasena_temporal` (`before insert on auth.users`: cuentas con `business_id` que no son superadmin), `marcar_contrasena_cambiada()` (solo `authenticated`, quita la marca de la propia cuenta) y `get_business_id()` que devuelve `''` con la marca. Las cuentas que ya existían no se marcan.
+12. **Revisión mensual del tamaño** (SQL Editor):
+   ```sql
+   select relname as tabla, pg_size_pretty(pg_total_relation_size(relid)) as tamano, n_live_tup as filas
+   from pg_stat_user_tables order by pg_total_relation_size(relid) desc;
+   ```
+
+## Compatibilidad dual: PWA + Windows
+
+- **PWA** (navegador, Netlify, móviles): `manifest.webmanifest` + `service-worker.js` (cache-first para el mismo origen; las peticiones a Supabase/CDN no se interceptan).
+  - Todo archivo nuevo que cargue `index.html` debe añadirse a `ASSETS` en `service-worker.js` **y** subir la versión de `CACHE` (`nexopos-vN`), o no funcionará offline.
+- **Windows (Electron)**: `main.js` es el punto de entrada real (`"main"` en `package.json`) con `preload.js`; `electron/` contiene una variante equivalente. Mantén ambos en sincronía. El renderer accede al disco solo vía `window.desktop` (`contextBridge`): `loadMirror`, `saveMirror`, `onFlushRequest`, respaldos, etc. — nunca con `require` desde el renderer.
+  - Todo archivo nuevo de la app debe añadirse también a `build.files` en `package.json` para que entre al instalador.
+  - Detectar escritorio con `globalThis.desktop?.…` y degradar con elegancia cuando no exista.
+- Comandos: `npm start` (Electron local), `npm run dist` (instalador Windows en `dist/`).
+
+## Modo Demo (`demo-mode.js`)
+
+- **Única definición** de `isDemoMode()` (expuesta en `globalThis`). No duplicarla en otros archivos; `storage.js` y `sync.js` solo hacen `require('./demo-mode.js')` cuando corren en Node.
+- Se activa **exclusivamente** con `?demo=true` en la URL. Netlify, localhost y escritorio arrancan en producción. No se persiste: se decide en cada carga, y quitar el parámetro vuelve a producción.
+- `globalThis.__FORCE_DEMO_MODE__` (booleano) lo fuerza solo en pruebas.
+- En demo: base IndexedDB aislada (`nexopos_demo_db`), catálogo de ejemplo, sin escrituras ni lecturas a Supabase, sin archivo espejo, y vigilancia de inactividad que reinicia los datos. Cualquier nueva función que escriba en la nube debe comprobar `isDemoMode()` primero.
+
+## Orden de carga en `index.html`
+
+En `<head>`:
+1. Meta CSP (primera, antes de cualquier script).
+2. Script inline del tema (`nexopos-theme` / `brasa-theme` en `localStorage` → `data-theme="light"`), antes del CSS para evitar parpadeo. Su hash está en la CSP.
+3. `supabase.min.js` (local, con `defer`).
+4. `theme.css` → `styles.css` → `design.css`.
+
+Al final de `<body>`, todos con `defer` (se ejecutan en este orden al terminar de leer el HTML; solo `app.js` ejecuta el arranque). Un `init` automático debe esperar a `DOMContentLoaded` mientras `readyState !== "complete"`, no solo en `"loading"`:
+1. `demo-mode.js` — debe ir antes que todo lo que llame a `isDemoMode()`.
+2. `planes.js` — plan del negocio y funciones por plan (`planAllows`, `requirePlan`, `applyPlanGates`); `modules.js` lo carga con `require` en Node.
+3. `storage.js` — solo declaraciones de persistencia.
+4. `modules.js` — vistas/render (facturas, reportes, etc.).
+5. `sync.js` — `NexoSync`.
+6. `import-products.js` — importación de productos desde Excel. Carga `xlsx.full.min.js` bajo demanda (`loadXlsxLib()`) al abrir el importador o descargar la plantilla; no lo vuelvas a poner en `index.html`.
+7. `print.js` — plantillas de tickets térmicos (58/80 mm) y `printReceipt()`: en escritorio vía `desktop.printReceipt` (ventana oculta en `main.js`), en web con un `<iframe>` invisible. No usar `window.open` para imprimir: en Electron está bloqueado.
+8. `app.js` — estado, lógica de negocio y `bootstrap()`.
+
+## Estilos: paleta Obsidian
+
+- Todos los colores salen de variables CSS en `theme.css`; en `styles.css`/`design.css` usa `var(--…)`, no hex nuevos.
+- **Modo Noche (por defecto)**, grafito oscuro: `--bg #181A20`, `--surface #20232B`, `--surface-2 #282C37`, `--surface-3 #323745`, texto `--text #F3F4F6` / `--muted #9CA3AF`.
+- **Acento naranja NexoPos**: `--accent #FF8C32`, `--accent-strong #E6731B`, `--accent-soft`/`--accent-line` para fondos y bordes.
+- **Estados**: `--success #10B981` (caja abierta, disponible), `--warn #F59E0B` (cuenta abierta), `--danger #EF4444` (con pedido, alertas de stock), `--info #3B82F6`.
+- **Barra lateral** siempre grafito (`--ink #12141A`, `--ink-2 #16181F`) también en Modo Día.
+- **Modo Día**: `html[data-theme="light"]` redefine los tokens en `theme.css`.
+- Radios `--r-sm 8px`, `--r-md 14px`, `--r-lg 22px`; fuentes `--font-ui` (Segoe UI Variable/Inter) y `--font-display` (Bahnschrift).
+- Los modales del modo demo usan las clases `.obsidian-modal` / `.obsidian-badge` (`design.css`).
+- Diseño responsive: punto de quiebre principal `@media (max-width: 768px)` con menú hamburguesa.
+
+## Pruebas
+
+Scripts de Node en `scratch/test-*.js`. `npm test` los corre todos con `node --test` (uno a la vez; cada archivo pasa si termina con código 0); uno solo: `node scratch/test-demo-mode.js`. Simulan `window`/`document` y cargan los archivos de la app. `scratch/audit-*.js` no entran en `npm test`: `audit-security-and-bugs.js` es la auditoría de seguridad (hoy con 2 hallazgos medios conocidos: token de sesión en `localStorage` y contraseña en claro en `admin_create_negocio`, pendientes del sprint de autenticación) y `audit-supabase-schema.js` revisa el esquema.

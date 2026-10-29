@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./dist/**)",
+      "Read(./node_modules/**)",
+      "Read(./supabase.min.js)",
+      "Read(./xlsx.full.min.js)",
+      "Read(./package-lock.json)",
+      "Read(./.git/**)"
+    ]
+  }
+}
