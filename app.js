@@ -13,6 +13,7 @@ const defaultState = {
   ],
   products: [],
   inventory: [],
+  insumos: [],
   orders: [], payments: [], purchases: [], expenses: [], closedShifts: [],
   users: [], suppliers: [], stockLog: [], auditLog: [], invoiceCounter: 0, backupLog: [], backupSettings: {}
 };
@@ -21,14 +22,14 @@ globalThis.state = state;
 globalThis.defaultState = defaultState;
 
 const DEMO_PRODUCTS = [
-  { id: 'demo_1', name: 'Café americano', category: 'Cafetería', price: 4000, cost: 1200, stock: 40, icon: '☕' },
-  { id: 'demo_2', name: 'Capuchino', category: 'Cafetería', price: 6500, cost: 2200, stock: 30, icon: '☕' },
-  { id: 'demo_3', name: 'Papas a la francesa', category: 'Entradas', price: 9000, cost: 3500, stock: 15, icon: '🍟' },
-  { id: 'demo_4', name: 'Empanadas x3', category: 'Entradas', price: 8000, cost: 3000, stock: 20, icon: '🥟' },
-  { id: 'demo_5', name: 'Bandeja paisa', category: 'Platos fuertes', price: 32000, cost: 14000, stock: 10, icon: '🍛' },
-  { id: 'demo_6', name: 'Pechuga a la plancha', category: 'Platos fuertes', price: 26000, cost: 11000, stock: 12, icon: '🍗' },
-  { id: 'demo_7', name: 'Hamburguesa de la casa', category: 'Platos fuertes', price: 24000, cost: 10000, stock: 14, icon: '🍔' },
-  { id: 'demo_8', name: 'Almuerzo ejecutivo', category: 'Platos fuertes', price: 18000, cost: 8000, stock: 25, icon: '🍽️' },
+  { id: 'demo_1', name: 'Café americano', category: 'Cafetería', price: 4000, cost: 380, stock: 40, icon: '☕', tipo: 'preparado', receta: [{ insumoId: 'ins_cafe', qty: 10, unit: 'g' }] },
+  { id: 'demo_2', name: 'Capuchino', category: 'Cafetería', price: 6500, cost: 1010, stock: 30, icon: '☕', tipo: 'preparado', receta: [{ insumoId: 'ins_cafe', qty: 10, unit: 'g' }, { insumoId: 'ins_leche', qty: 150, unit: 'ml' }] },
+  { id: 'demo_3', name: 'Papas a la francesa', category: 'Entradas', price: 9000, cost: 970, stock: 15, icon: '🍟', tipo: 'preparado', receta: [{ insumoId: 'ins_papa', qty: 250, unit: 'g' }, { insumoId: 'ins_aceite', qty: 30, unit: 'ml' }] },
+  { id: 'demo_4', name: 'Empanadas x3', category: 'Entradas', price: 8000, cost: 2460, stock: 20, icon: '🥟', tipo: 'preparado', receta: [{ insumoId: 'ins_harina', qty: 120, unit: 'g' }, { insumoId: 'ins_carne', qty: 60, unit: 'g' }, { insumoId: 'ins_aceite', qty: 60, unit: 'ml' }] },
+  { id: 'demo_5', name: 'Bandeja paisa', category: 'Platos fuertes', price: 32000, cost: 7920, stock: 10, icon: '🍛', tipo: 'preparado', receta: [{ insumoId: 'ins_arroz', qty: 150, unit: 'g' }, { insumoId: 'ins_frijol', qty: 120, unit: 'g' }, { insumoId: 'ins_carne', qty: 120, unit: 'g' }, { insumoId: 'ins_chicharron', qty: 100, unit: 'g' }, { insumoId: 'ins_huevo', qty: 1, unit: 'und' }, { insumoId: 'ins_platano', qty: 1, unit: 'und' }] },
+  { id: 'demo_6', name: 'Pechuga a la plancha', category: 'Platos fuertes', price: 26000, cost: 5020, stock: 12, icon: '🍗', tipo: 'preparado', receta: [{ insumoId: 'ins_pechuga', qty: 250, unit: 'g' }, { insumoId: 'ins_arroz', qty: 150, unit: 'g' }, { insumoId: 'ins_papa', qty: 150, unit: 'g' }] },
+  { id: 'demo_7', name: 'Hamburguesa de la casa', category: 'Platos fuertes', price: 24000, cost: 5630, stock: 14, icon: '🍔', tipo: 'preparado', receta: [{ insumoId: 'ins_pan', qty: 1, unit: 'und' }, { insumoId: 'ins_carne', qty: 150, unit: 'g' }, { insumoId: 'ins_queso', qty: 30, unit: 'g' }, { insumoId: 'ins_papa', qty: 200, unit: 'g' }, { insumoId: 'ins_aceite', qty: 30, unit: 'ml' }] },
+  { id: 'demo_8', name: 'Almuerzo ejecutivo', category: 'Platos fuertes', price: 18000, cost: 5100, stock: 25, icon: '🍽️', tipo: 'preparado', receta: [{ insumoId: 'ins_arroz', qty: 150, unit: 'g' }, { insumoId: 'ins_frijol', qty: 100, unit: 'g' }, { insumoId: 'ins_pechuga', qty: 150, unit: 'g' }, { insumoId: 'ins_platano', qty: 1, unit: 'und' }] },
   { id: 'demo_9', name: 'Croissant de jamón y queso', category: 'Cafetería', price: 7500, cost: 3000, stock: 12, icon: '🥐' },
   { id: 'demo_10', name: 'Torta de chocolate', category: 'Postres', price: 9500, cost: 3800, stock: 8, icon: '🍰' },
   { id: 'demo_11', name: 'Agua con gas 600ml', category: 'Bebidas', price: 3500, cost: 1500, stock: 20, icon: '🥤' },
@@ -37,6 +38,24 @@ const DEMO_PRODUCTS = [
   { id: 'demo_14', name: 'Jugo natural en agua', category: 'Bebidas', price: 6000, cost: 2000, stock: 18, icon: '🧃' }
 ];
 globalThis.DEMO_PRODUCTS = DEMO_PRODUCTS;
+// Insumos del Modo Demo (costo por su unidad de manejo); los platos preparados de arriba los usan en sus recetas
+const DEMO_INSUMOS = [
+  { id: 'ins_arroz', name: 'Arroz', unit: 'kg', qty: 10, min: 3, cost: 4000 },
+  { id: 'ins_frijol', name: 'Fríjol', unit: 'kg', qty: 5, min: 2, cost: 9000 },
+  { id: 'ins_carne', name: 'Carne molida', unit: 'kg', qty: 4, min: 1.5, cost: 22000 },
+  { id: 'ins_chicharron', name: 'Chicharrón', unit: 'kg', qty: 3, min: 1, cost: 18000 },
+  { id: 'ins_pechuga', name: 'Pechuga de pollo', unit: 'kg', qty: 6, min: 2, cost: 16000 },
+  { id: 'ins_papa', name: 'Papa', unit: 'kg', qty: 15, min: 5, cost: 2800 },
+  { id: 'ins_harina', name: 'Harina de maíz', unit: 'kg', qty: 5, min: 1, cost: 5000 },
+  { id: 'ins_queso', name: 'Queso', unit: 'kg', qty: 3, min: 1, cost: 20000 },
+  { id: 'ins_cafe', name: 'Café molido', unit: 'kg', qty: 2, min: 0.5, cost: 38000 },
+  { id: 'ins_aceite', name: 'Aceite', unit: 'L', qty: 8, min: 2, cost: 9000 },
+  { id: 'ins_leche', name: 'Leche', unit: 'L', qty: 10, min: 3, cost: 4200 },
+  { id: 'ins_huevo', name: 'Huevo', unit: 'und', qty: 60, min: 15, cost: 600 },
+  { id: 'ins_platano', name: 'Plátano maduro', unit: 'und', qty: 20, min: 6, cost: 1200 },
+  { id: 'ins_pan', name: 'Pan de hamburguesa', unit: 'und', qty: 24, min: 8, cost: 900 }
+];
+globalThis.DEMO_INSUMOS = DEMO_INSUMOS;
 
 const DEMO_TABLES = [
   { id: 'm1', name: 'Mesa 1', zone: 'Salón', type: 'table' },
@@ -48,14 +67,14 @@ globalThis.DEMO_TABLES = DEMO_TABLES;
 
 function getInitialDemoState() {
   const products = structuredClone(DEMO_PRODUCTS);
-  const inventory = products.map(p => ({
+  const inventory = products.filter(p => p.tipo !== 'preparado').map(p => ({
     id: 'stock-' + p.id,
     name: p.name,
     unit: 'und',
     qty: Number(p.stock || 20),
     min: 5
   }));
-  products.forEach(p => { p.inventoryId = 'stock-' + p.id; });
+  products.forEach(p => { if (p.tipo !== 'preparado') p.inventoryId = 'stock-' + p.id; });
   const demoUser = {
     id: 'u_demo_guest',
     name: 'Invitado Demo',
@@ -85,6 +104,7 @@ function getInitialDemoState() {
     cashShift: { id: 'shift_demo_init', status: 'closed', openingCash: 0 },
     tables: structuredClone(DEMO_TABLES),
     inventory,
+    insumos: structuredClone(DEMO_INSUMOS),
     products,
     orders: [],
     payments: [],
@@ -287,6 +307,7 @@ function normalizeState(saved) {
   } else {
     normalized.products.forEach(product => {
       product.cost = Number(product.cost || 0);
+      if (product.tipo === 'preparado') return; // sin stock propio: se descuentan sus insumos
       if (!product.inventoryId) {
         const inventoryId = `stock-${product.id}`;
         const stockCandidates = Object.entries(product.recipe || {}).map(([id, amount]) => {
@@ -541,7 +562,7 @@ function invoiceItemsMarkup(payment) {
 // URLs externas y comillas para inyectar atributos (p. ej. desde un respaldo .json manipulado).
 const SAFE_IMAGE_RE = /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[a-z0-9+/=\s]+$/i;
 function safeImageSrc(src) { return typeof src === 'string' && SAFE_IMAGE_RE.test(src) ? src : ''; }
-function setImagePreview(element,image,fallback) { const src=safeImageSrc(image); element.innerHTML=src?`<img src="${src}" alt="Vista previa" />`:escapeHtml(String(fallback || 'N').charAt(0).toUpperCase()); }
+function setImagePreview(element,image,fallback) { const src=safeImageSrc(image); element.innerHTML=src?`<img src="${src}" alt="Vista previa" />`:escapeHtml(Array.from(String(fallback || 'N'))[0].toUpperCase()); } // primer carácter completo: charAt(0) parte los emojis
 
 function renderAll() {
   document.querySelector('#todayLabel').textContent = displayDate().replace(/^./, c => c.toUpperCase());
@@ -571,7 +592,7 @@ function renderAll() {
   if (typeof renderTeam === 'function') renderTeam(); else if (typeof globalThis.renderTeam === 'function') globalThis.renderTeam();
   if (typeof renderBackupCard === 'function') renderBackupCard(); else if (typeof globalThis.renderBackupCard === 'function') globalThis.renderBackupCard();
 }
-function renderNavigation() { const low = state.inventory.filter(i => i.qty <= i.min).length; document.querySelector('#inventoryBadge').textContent = low; }
+function renderNavigation() { const low = [...state.inventory, ...(state.insumos || [])].filter(i => i.qty <= i.min).length; document.querySelector('#inventoryBadge').textContent = low; }
 function renderStats() {
   const payments = paymentsToday();
   const sold = payments.reduce((s,p) => s+p.amount, 0);
@@ -606,6 +627,7 @@ globalThis.elapsedLabel = elapsedLabel;
 globalThis.renderCustomOrders = renderCustomOrders;
 globalThis.renderAll = renderAll;
 function renderInventory() {
+  if (typeof renderInsumos === 'function') renderInsumos();
   const lows = state.inventory.filter(i => i.qty <= i.min && i.qty > 0);
   const outOfStock = state.inventory.filter(i => i.qty <= 0);
   document.querySelector('#inventorySummary').innerHTML = `<div class="summary-item"><span>Productos en stock</span><strong>${state.inventory.length}</strong></div><div class="summary-item ${lows.length?'warning':''}"><span>Bajo stock</span><strong>${lows.length}</strong></div><div class="summary-item ${outOfStock.length?'danger':''}"><span>Agotados</span><strong>${outOfStock.length}</strong></div><div class="summary-item"><span>Última actualización</span><strong>Ahora</strong></div>`;
@@ -646,6 +668,7 @@ function getPOSProducts() {
     if (!p) return;
     const pId = String(p.id);
     knownProductIds.add(pId);
+    if (p.tipo === 'preparado') return; // su disponibilidad sale de los insumos (preparedAvailable), no de un stock propio
     const invId = p.inventoryId || `stock-${p.id}`;
     knownInvIds.add(String(invId));
     knownInvIds.add(pId);
@@ -981,11 +1004,15 @@ function renderOrderDialog() {
   // 4. Renderizar tarjetas de productos con nombre, precio, categoría y stock
   if (products.length > 0) {
     prodGridEl.innerHTML = products.map(p => {
-      const stockVal = Number(p.stock ?? 0);
-      const isOutOfStock = stockVal <= 0;
-      const stockBadge = stockVal > 0
-        ? `<span class="product-stock-tag stock-available">${formatQty(stockVal)} disp.</span>`
-        : `<span class="product-stock-tag stock-out">Agotado</span>`;
+      // Plato preparado: porciones que alcanzan con los insumos (null = receta sin insumos con stock definido)
+      const portions = p.tipo === 'preparado' && typeof preparedAvailable === 'function' ? preparedAvailable(p) : undefined;
+      const stockVal = portions === undefined ? Number(p.stock ?? 0) : portions;
+      const isOutOfStock = stockVal !== null && stockVal <= 0;
+      const stockBadge = stockVal === null
+        ? '<span class="product-stock-tag stock-available">Preparado</span>'
+        : stockVal > 0
+          ? `<span class="product-stock-tag stock-available">${formatQty(stockVal)} ${portions === undefined ? 'disp.' : 'porc.'}</span>`
+          : `<span class="product-stock-tag stock-out">${portions === undefined ? 'Agotado' : 'Sin insumos'}</span>`;
 
       return `
         <button type="button" class="product ${isOutOfStock ? 'is-out-of-stock' : ''}" data-product="${escapeHtml(p.id)}" title="${escapeHtml(p.name || 'Producto')}">
@@ -1051,7 +1078,7 @@ function renderOrderDialog() {
   if (kitchenBtn && typeof kitchenPendingCount === 'function') {
     const pending = kitchenPendingCount(order), voids = (order.pendingVoids || []).length;
     kitchenBtn.disabled = !pending;
-    kitchenBtn.textContent = pending ? `🔔 Enviar a cocina (${pending}${voids ? ' · incluye anulación' : ''})` : '🔔 Todo enviado a cocina';
+    kitchenBtn.textContent = pending ? `🔔 Enviar a cocina (${pending}${voids ? ' · incluye anulación' : ''})` : order.items.length ? '🔔 Todo enviado a cocina' : '🔔 Enviar a cocina';
   }
 
   const deleteBtn = document.querySelector('#deleteOrderButton');
@@ -1079,8 +1106,13 @@ function addProduct(productId) {
   const product = prods.find(p => p.id === productId);
   if (!order || !product) return;
   const found = order.items.find(i => i.productId === productId);
+  const prepared = product.tipo === 'preparado' && typeof recipeCost === 'function';
+  // Avisa pero no frena la venta: el insumo queda en negativo hasta la próxima compra o conteo
+  if (prepared && preparedAvailable(product) === 0) showToast(`⚠ Faltan insumos para ${product.name}. Se vende igual; revisa el inventario.`);
   if (found) found.qty++;
-  else {
+  else if (prepared) {
+    order.items.push({ productId: product.id, name: product.name, price: product.price, cost: recipeCost(product), category: product.category, qty: 1, tipo: 'preparado', receta: structuredClone(product.receta || []) });
+  } else {
     order.items.push({
       productId: product.id,
       name: product.name,
@@ -1310,6 +1342,8 @@ function deductInventory(order) {
 
     const prodId = item.productId || item.id;
     const product = state.products.find(p => p.id === prodId || (item.inventoryId && p.inventoryId === item.inventoryId));
+    // Plato preparado: descuenta los insumos de la receta que llevaba el pedido (la del producto si es un pedido viejo)
+    if ((item.tipo === 'preparado' || product?.tipo === 'preparado') && typeof consumeRecipe === 'function') return consumeRecipe(item.receta?.length ? item : product, qtySold);
     const invId = item.inventoryId || product?.inventoryId || (prodId ? `stock-${prodId}` : null);
     const supply = invId ? state.inventory.find(i => i.id === invId) : null;
 
@@ -1681,9 +1715,9 @@ function chargeSelectedSplitItems() {
     customerName: `${order.tableName} · Ítems seleccionados`
   });
 }
-function openInventoryDialog(itemId=null) { const select=document.querySelector('#inventorySelect'); select.innerHTML=state.inventory.map(i=>`<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)} (${formatQty(i.qty)} ${escapeHtml(i.unit)})</option>`).join(''); if(itemId)select.value=itemId; document.querySelector('#inventoryAmount').value='';document.querySelector('#inventoryReason').value='';document.querySelector('#inventoryDialog').showModal(); }
-function openProductDialog(productId=null) { editingProductId=productId;const product=productId && state.products.find(item=>item.id===productId), stock=product && state.inventory.find(item=>item.id===product.inventoryId);pendingProductImage=product?.image || null;document.querySelector('#productName').value=product?.name || '';document.querySelector('#productCategory').value=product?.category || '';document.querySelector('#productCost').value=product?.cost ?? '';document.querySelector('#productPrice').value=product?.price ?? '';document.querySelector('#productStock').value=stock?.qty ?? '';document.querySelector('#productMinStock').value=stock?.min ?? 5;document.querySelector('#productUnit').value=stock?.unit || 'und';document.querySelector('#productImage').value='';setImagePreview(document.querySelector('#productImagePreview'),pendingProductImage,product?.icon || '🍾');document.querySelector('#productDialog h2').textContent=product ? 'Editar producto' : 'Nuevo producto';document.querySelector('#saveProductButton').textContent=product ? 'Guardar cambios' : 'Crear producto e inventario';document.querySelector('#productDialog').showModal(); }
-function saveProduct() { const name=document.querySelector('#productName').value.trim(), category=document.querySelector('#productCategory').value.trim() || 'Otros'; const costRaw=document.querySelector('#productCost').value, priceRaw=document.querySelector('#productPrice').value, stockRaw=document.querySelector('#productStock').value, minRaw=document.querySelector('#productMinStock').value; const cost=Number(costRaw), price=Number(priceRaw), stock=Number(stockRaw || 0), min=minRaw==='' ? 5 : Number(minRaw || 0), unit=document.querySelector('#productUnit').value; if(!name || costRaw==='' || priceRaw==='' || cost<0 || price<=0 || stock<0 || min<0) return showToast('Completa nombre, costo, precio de venta y existencias válidas.');if(!state.categories.includes(category))state.categories.push(category);let product=editingProductId && state.products.find(item=>item.id===editingProductId);if(product){const supply=state.inventory.find(item=>item.id===product.inventoryId);product.name=name;product.category=category;product.cost=cost;product.price=price;product.image=pendingProductImage;product.sync_status='pending';if(supply){supply.name=name;supply.unit=unit;supply.qty=stock;supply.min=min;}else{const inventoryId=uid('inv');state.inventory.push({id:inventoryId,name,unit,qty:stock,min});product.inventoryId=inventoryId;product.recipe={[inventoryId]:1};}}else{const inventoryId=uid('inv'), productId=uid('prod');state.inventory.push({id:inventoryId,name,unit,qty:stock,min});state.products.push({id:productId,name,category,cost,price,icon:'🍾',image:pendingProductImage,inventoryId,recipe:{[inventoryId]:1},sync_status:'pending'});}saveState();document.querySelector('#productDialog').close();renderAll();showToast(product ? 'Producto actualizado.' : 'Producto creado con su stock inicial.'); }
+function openInventoryDialog(itemId=null) { const select=document.querySelector('#inventorySelect'); select.innerHTML=typeof stockItemOptions==='function'?stockItemOptions():state.inventory.map(i=>`<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)} (${formatQty(i.qty)} ${escapeHtml(i.unit)})</option>`).join(''); if(itemId)select.value=itemId; document.querySelector('#inventoryAmount').value='';document.querySelector('#inventoryReason').value='';document.querySelector('#inventoryDialog').showModal(); }
+function openProductDialog(productId=null) { editingProductId=productId;const product=productId && state.products.find(item=>item.id===productId), stock=product && state.inventory.find(item=>item.id===product.inventoryId);pendingProductImage=product?.image || null;document.querySelector('#productName').value=product?.name || '';document.querySelector('#productCategory').value=product?.category || '';document.querySelector('#productCost').value=product?.cost ?? '';document.querySelector('#productPrice').value=product?.price ?? '';document.querySelector('#productStock').value=stock?.qty ?? '';document.querySelector('#productMinStock').value=stock?.min ?? 5;document.querySelector('#productUnit').value=stock?.unit || 'und';document.querySelector('#productImage').value='';setImagePreview(document.querySelector('#productImagePreview'),pendingProductImage,product?.icon || '🍾');document.querySelector('#productDialog h2').textContent=product ? 'Editar producto' : 'Nuevo producto';document.querySelector('#saveProductButton').textContent=product ? 'Guardar cambios' : 'Crear producto';if(typeof fillProductRecipe==='function')fillProductRecipe(product);document.querySelector('#productDialog').showModal(); }
+function saveProduct() { const name=document.querySelector('#productName').value.trim(), category=document.querySelector('#productCategory').value.trim() || 'Otros'; if(document.querySelector('#productType')?.value==='preparado' && typeof savePreparedProduct==='function') return savePreparedProduct({ name, category, price: Number(document.querySelector('#productPrice').value), editingId: editingProductId }); const costRaw=document.querySelector('#productCost').value, priceRaw=document.querySelector('#productPrice').value, stockRaw=document.querySelector('#productStock').value, minRaw=document.querySelector('#productMinStock').value; const cost=Number(costRaw), price=Number(priceRaw), stock=Number(stockRaw || 0), min=minRaw==='' ? 5 : Number(minRaw || 0), unit=document.querySelector('#productUnit').value; if(!name || costRaw==='' || priceRaw==='' || cost<0 || price<=0 || stock<0 || min<0) return showToast('Completa nombre, costo, precio de venta y existencias válidas.');if(!state.categories.includes(category))state.categories.push(category);let product=editingProductId && state.products.find(item=>item.id===editingProductId);if(product){const supply=state.inventory.find(item=>item.id===product.inventoryId);delete product.tipo;delete product.receta;product.name=name;product.category=category;product.cost=cost;product.price=price;product.image=pendingProductImage;product.sync_status='pending';if(supply){supply.name=name;supply.unit=unit;supply.qty=stock;supply.min=min;}else{const inventoryId=uid('inv');state.inventory.push({id:inventoryId,name,unit,qty:stock,min});product.inventoryId=inventoryId;product.recipe={[inventoryId]:1};}}else{const inventoryId=uid('inv'), productId=uid('prod');state.inventory.push({id:inventoryId,name,unit,qty:stock,min});state.products.push({id:productId,name,category,cost,price,icon:'🍾',image:pendingProductImage,inventoryId,recipe:{[inventoryId]:1},sync_status:'pending'});}saveState();document.querySelector('#productDialog').close();renderAll();showToast(product ? 'Producto actualizado.' : 'Producto creado con su stock inicial.'); }
 function deleteProduct(productId) { const product=state.products.find(item=>item.id===productId);if(!product)return;if(!window.confirm(`¿Eliminar ${product.name}? Esta acción no borra facturas ni ventas históricas.`))return;if(globalThis.NexoSync?.deleteProduct){globalThis.NexoSync.deleteProduct(productId);}else if(globalThis.NexoSync?.trackProductDeletion){globalThis.NexoSync.trackProductDeletion(productId);}const targetInventoryId=product.inventoryId || `stock-${productId}`;state.products=state.products.filter(item=>item.id!==productId);if(state.products.length===0){state.inventory=[];}else{const validInventoryIds=new Set(state.products.map(p=>p.inventoryId).filter(Boolean));state.inventory=state.inventory.filter(item=>item.id!==targetInventoryId&&item.id!==product.inventoryId&&item.id!==`stock-${productId}`&&item.id!==productId&&validInventoryIds.has(item.id));}saveState();renderAll();showToast('Producto eliminado del catálogo.'); }
 globalThis.deleteProduct = deleteProduct;
 function openCategoriesDialog() { renderCategoryList();document.querySelector('#newCategoryName').value='';document.querySelector('#categoriesDialog').showModal(); }
@@ -1740,11 +1774,33 @@ async function optimizeImageFile(file) {
   return best; // la versión más reducida, aunque pase un poco del objetivo
 }
 function saveProfile() { const name=document.querySelector('#businessName').value.trim(),nit=document.querySelector('#businessNit')?document.querySelector('#businessNit').value.trim():(state.profile?.nit || ''),address=document.querySelector('#businessAddress').value.trim(),phone=document.querySelector('#businessPhone').value.trim(),ownerPhone=document.querySelector('#businessOwnerPhone')?.value.trim() || '+57',syncId=state.terminal?.businessId || document.querySelector('#businessSyncId')?.value.trim() || 'nexopos_default';if(!name)return showToast('Indica el nombre del negocio.');state.profile={...state.profile,name,nit,address,phone,ownerPhone,syncId,sync_status:'pending',image:pendingBusinessImage ?? state.profile.image};saveState();renderAll();showToast('Información del negocio guardada.'); }
-function openPurchaseDialog() { if(!requireOpenShift())return;if(!state.products.length) return showToast('Crea primero un producto.'); const product=state.products[0];purchaseDraft=[{productId:product.id,qty:1,unitCost:defaultUnitCost(product)}]; document.querySelector('#purchaseSupplier').value='';document.querySelector('#purchaseInvoice').value='';document.querySelector('#purchaseDate').value=today();document.querySelector('#purchaseMethod').value='Efectivo';renderPurchaseLines();document.querySelector('#purchaseDialog').showModal(); }
-function renderPurchaseLines() { const selectOptions=state.products.map(product=>`<option value="${product.id}">${escapeHtml(product.name)} · costo prom. ${money.format(product.cost || 0)}</option>`).join(''); document.querySelector('#purchaseLines').innerHTML=purchaseDraft.map((line,index)=>`<div class="purchase-line"><select data-purchase-index="${index}" data-purchase-field="productId">${selectOptions}</select><input data-purchase-index="${index}" data-purchase-field="qty" type="number" min="0.1" step="0.1" value="${line.qty}" aria-label="Cantidad" /><input data-purchase-index="${index}" data-purchase-field="unitCost" type="number" min="0" value="${line.unitCost}" aria-label="Costo unitario" /><button class="remove-line" data-remove-purchase-line="${index}" aria-label="Eliminar producto">×</button></div>`).join(''); purchaseDraft.forEach((line,index)=>{const select=document.querySelector(`[data-purchase-index="${index}"][data-purchase-field="productId"]`);if(select)select.value=line.productId;}); updatePurchaseTotal(); }
-function updatePurchaseDraft(target) { const line=purchaseDraft[Number(target.dataset.purchaseIndex)];if(!line)return;const field=target.dataset.purchaseField;if(field==='productId'){line.productId=target.value;line.unitCost=defaultUnitCost(state.products.find(product=>product.id===line.productId));renderPurchaseLines();return;}line[field]=Number(target.value || 0);updatePurchaseTotal(); }
+// Se compran productos de reventa e insumos (un plato preparado no se compra: se compran sus insumos)
+function purchasableItems() { return [...state.products.filter(p => p.tipo !== 'preparado'), ...(state.insumos || [])]; }
+function purchaseItem(id) { return state.products.find(p => p.id === id) || (typeof insumoById === 'function' ? insumoById(id) : null); }
+function newPurchaseLine(item = purchasableItems()[0]) { return { productId: item.id, qty: 1, ...(item.unit ? { unit: item.unit } : {}), unitCost: defaultUnitCost(item) }; }
+function openPurchaseDialog() { if(!requireOpenShift())return;if(!purchasableItems().length) return showToast('Crea primero un producto o un insumo.'); purchaseDraft=[newPurchaseLine()]; document.querySelector('#purchaseSupplier').value='';document.querySelector('#purchaseInvoice').value='';document.querySelector('#purchaseDate').value=today();document.querySelector('#purchaseMethod').value='Efectivo';renderPurchaseLines();document.querySelector('#purchaseDialog').showModal(); }
+function renderPurchaseLines() {
+  const products = state.products.filter(p => p.tipo !== 'preparado'), insumos = state.insumos || [];
+  const option = (item, detail) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} · ${detail}</option>`;
+  const selectOptions = (products.length ? `<optgroup label="Productos">${products.map(p => option(p, `costo prom. ${money.format(p.cost || 0)}`)).join('')}</optgroup>` : '')
+    + (insumos.length ? `<optgroup label="Insumos">${insumos.map(i => option(i, `${money.format(i.cost || 0)}/${i.unit}`)).join('')}</optgroup>` : '');
+  document.querySelector('#purchaseLines').innerHTML = purchaseDraft.map((line, index) => {
+    const item = purchaseItem(line.productId), units = item?.unit && typeof compatibleUnits === 'function' ? compatibleUnits(item.unit) : null;
+    const unitSelect = units ? `<select class="purchase-unit" data-purchase-index="${index}" data-purchase-field="unit" aria-label="Unidad de compra">${units.map(u => `<option value="${u}"${u === line.unit ? ' selected' : ''}>${u}</option>`).join('')}</select>` : '';
+    return `<div class="purchase-line${units ? ' with-unit' : ''}"><select data-purchase-index="${index}" data-purchase-field="productId">${selectOptions}</select><input data-purchase-index="${index}" data-purchase-field="qty" type="number" min="0.1" step="any" value="${line.qty}" aria-label="Cantidad" />${unitSelect}<input data-purchase-index="${index}" data-purchase-field="unitCost" type="number" min="0" value="${line.unitCost}" aria-label="${units ? 'Costo por ' + line.unit : 'Costo unitario'}" title="${units ? 'Costo por ' + line.unit : 'Costo unitario'}" /><button class="remove-line" data-remove-purchase-line="${index}" aria-label="Eliminar producto">×</button></div>`;
+  }).join('');
+  purchaseDraft.forEach((line, index) => { const select = document.querySelector(`[data-purchase-index="${index}"][data-purchase-field="productId"]`); if (select) select.value = line.productId; });
+  updatePurchaseTotal();
+}
+function updatePurchaseDraft(target) {
+  const line = purchaseDraft[Number(target.dataset.purchaseIndex)]; if (!line) return;
+  const field = target.dataset.purchaseField;
+  if (field === 'productId') { Object.assign(line, newPurchaseLine(purchaseItem(target.value)), { qty: line.qty }); if (!purchaseItem(target.value)?.unit) delete line.unit; return renderPurchaseLines(); }
+  if (field === 'unit') { line.unit = target.value; line.unitCost = defaultUnitCost(purchaseItem(line.productId), line.unit); return renderPurchaseLines(); }
+  line[field] = Number(target.value || 0); updatePurchaseTotal();
+}
 function updatePurchaseTotal() { document.querySelector('#purchaseTotal').textContent=money.format(purchaseDraft.reduce((sum,line)=>sum+(Number(line.qty)||0)*(Number(line.unitCost)||0),0)); }
-function addPurchaseLine() { const product=state.products[0];purchaseDraft.push({productId:product.id,qty:1,unitCost:defaultUnitCost(product)});renderPurchaseLines(); }
+function addPurchaseLine() { purchaseDraft.push(newPurchaseLine());renderPurchaseLines(); }
 function removePurchaseLine(index) { if(purchaseDraft.length===1)return showToast('La factura debe tener al menos un producto.');purchaseDraft.splice(index,1);renderPurchaseLines(); }
 function openExpenseDialog() { if(!requireOpenShift())return;document.querySelector('#expenseCategory').value='Servicios públicos';document.querySelector('#expenseDescription').value='';document.querySelector('#expenseAmount').value='';document.querySelector('#expenseMethod').value='Efectivo';document.querySelector('#expenseDate').value=today();document.querySelector('#expenseDialog').showModal(); }
 function saveExpense() {
@@ -2039,7 +2095,7 @@ function savePrintSetting(key, value) { printSettings()[key] = value; saveState(
 globalThis.printPaymentReceipt = printPaymentReceipt;
 
 function getLowAndOutOfStockItems() {
-  return state.inventory.filter(i => i.qty <= i.min).map(item => {
+  return [...state.inventory, ...(state.insumos || [])].filter(i => i.qty <= i.min).map(item => {
     const ideal = Math.max(item.min * 2, item.min + 5);
     const needed = Math.max(1, Math.round(ideal - item.qty));
     return {
@@ -2201,6 +2257,12 @@ document.addEventListener('click', event => {
   if (target.id === 'createCustomOrderButton') createCustomOrder();
   if (target.id === 'saveOrderButton') saveOrder();
   if (target.id === 'sendKitchenButton') { sendOrderToKitchen(); renderOrderDialog(); }
+  if (target.id === 'newInsumoButton') openInsumoDialog();
+  if (target.id === 'saveInsumoButton') saveInsumo();
+  if (target.id === 'deleteInsumoButton') deleteInsumo();
+  if (target.dataset.editInsumo) openInsumoDialog(target.dataset.editInsumo);
+  if (target.id === 'addRecipeLineButton') addRecipeLine();
+  if (target.dataset.removeRecipeLine !== undefined) removeRecipeLine(target.dataset.removeRecipeLine);
   if (target.id === 'chargeButton') openPayment();
   if (target.id === 'confirmPaymentButton') confirmPayment();
   if (target.id === 'deleteOrderButton') deleteCurrentOrder();
@@ -2241,6 +2303,9 @@ if (searchEl) {
     renderOrderDialog();
   });
 }
+// Receta en el formulario de producto y unidad del formulario de insumo
+document.addEventListener('input', e => { if (e.target.dataset?.recipeField === 'qty') updateRecipeDraft(e.target); else if (e.target.id === 'productPrice' && typeof updateRecipeSummary === 'function') updateRecipeSummary(); });
+document.addEventListener('change', e => { if (e.target.dataset?.recipeField && e.target.dataset.recipeField !== 'qty') updateRecipeDraft(e.target); else if (e.target.id === 'productType') toggleProductType(); else if (e.target.id === 'insumoUnit') updateInsumoUnitLabels(); });
 // Nota para cocina de una línea: se guarda sin volver a pintar (no pierde el foco); sale en la próxima comanda
 document.addEventListener('input', e => { const productId = e.target.dataset?.kitchenNote; if (productId === undefined) return; const item = getOrder(state.currentOrderId)?.items.find(i => i.productId === productId); if (item) { item.kitchenNote = e.target.value.slice(0, 80); saveState(); } });
 document.addEventListener('change', e => { const category = e.target.dataset?.kitchenCategory; if (category !== undefined) { setKitchenStation(category, e.target.value); showToast(`${category}: ${KITCHEN_STATION_OPTIONS[e.target.value]}.`); } else if (e.target.dataset?.stationPrinter) { printSettings().stationPrinters = { ...(printSettings().stationPrinters || {}), [e.target.dataset.stationPrinter]: e.target.value }; saveState(); } });

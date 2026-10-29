@@ -311,6 +311,8 @@ function adjustSoldStock(item, soldDelta) {
   const nowIso = new Date().toISOString();
   const apply = (supply, amount) => { supply.qty = Math.max(0, Number((supply.qty - amount).toFixed(2))); };
   const prod = state.products.find(p => p.id === (item.productId || item.id) || (item.inventoryId && p.inventoryId === item.inventoryId));
+  // Plato preparado: se mueven sus insumos (receta guardada en la venta; si es una venta vieja, la actual del producto)
+  if (item.tipo === 'preparado' || isPrepared(prod)) return consumeRecipe(recipeLines(item).length ? item : prod, soldDelta);
   const invId = item.inventoryId || prod?.inventoryId || (prod ? `stock-${prod.id}` : null);
   const supply = invId ? state.inventory.find(i => i.id === invId) : null;
 
@@ -392,7 +394,7 @@ function renderInvoiceDraft() {
 function addInvoiceLine() {
   if (!invoiceDraft) return; const product = state.products.find(p => p.id === document.querySelector('#invoiceAddProduct').value); if (!product) return;
   const found = invoiceDraft.items.find(i => i.productId === product.id);
-  if (found) found.qty = Number(found.qty) + 1; else invoiceDraft.items.push({ productId: product.id, name: product.name, price: product.price, cost: Number(product.cost || 0), qty: 1, inventoryId: product.inventoryId, recipe: product.recipe, category: product.category });
+  if (found) found.qty = Number(found.qty) + 1; else invoiceDraft.items.push({ productId: product.id, name: product.name, price: product.price, cost: Number(product.cost || 0), qty: 1, inventoryId: product.inventoryId, recipe: product.recipe, category: product.category, ...(isPrepared(product) ? { tipo: 'preparado', receta: structuredClone(recipeLines(product)) } : {}) });
   renderInvoiceDraft();
 }
 function saveInvoiceEdit() {
@@ -475,7 +477,10 @@ function reopenSplitShare(payment) {
 
 /* ============ Proveedores y costo promedio ============ */
 let editingSupplierId = null;
-function defaultUnitCost(product) { return Number(product?.lastCost ?? product?.cost ?? 0); }
+function defaultUnitCost(product, unit = product?.unit) {
+  const cost = Number(product?.lastCost ?? product?.cost ?? 0);
+  return product?.unit && unit && unit !== product.unit ? Math.round(cost * convertUnits(1, unit, product.unit)) : cost; // insumo: costo en la unidad de compra
+}
 function upsertSupplier(name) {
   const clean = name.trim(); let supplier = state.suppliers.find(s => s.name.toLowerCase() === clean.toLowerCase());
   if (!supplier) { supplier = { id: uid('sup'), name: clean, nit: '', phone: '', notes: '' }; state.suppliers.push(supplier); }
@@ -515,9 +520,12 @@ function renderProducts() {
     return;
   }
   tbody.innerHTML = state.products.map(product => {
-    const stock = state.inventory.find(item => item.id === product.inventoryId), cost = Number(product.cost || 0), profit = Number(product.price || 0) - cost, margin = cost ? profit / cost * 100 : 0;
-    const last = product.lastCost !== undefined && Math.round(product.lastCost) !== Math.round(cost) ? `<br><small class="muted">Última compra ${money.format(product.lastCost)}</small>` : '';
-    return `<tr><td><strong>${escapeHtml(product.name)}</strong></td><td>${escapeHtml(product.category || 'Sin categoría')}</td><td>${money.format(cost)}${last}</td><td><strong>${money.format(product.price)}</strong></td><td><strong>${money.format(profit)}</strong></td><td>${cost ? `${margin.toFixed(1)}%` : '<span class="muted">—</span>'}</td><td>${stock ? `${formatQty(stock.qty)} ${escapeHtml(stock.unit)}` : '<span class="muted">Sin stock</span>'}</td><td><div class="product-actions"><button class="mini-action" data-edit-product="${product.id}">Editar</button><button class="mini-action delete-action" data-delete-product="${product.id}">Eliminar</button></div></td></tr>`;
+    const prepared = isPrepared(product), stock = !prepared && state.inventory.find(item => item.id === product.inventoryId);
+    const cost = prepared ? recipeCost(product) : Number(product.cost || 0), profit = Number(product.price || 0) - cost, margin = cost ? profit / cost * 100 : 0;
+    const last = !prepared && product.lastCost !== undefined && Math.round(product.lastCost) !== Math.round(cost) ? `<br><small class="muted">Última compra ${money.format(product.lastCost)}</small>` : '';
+    const portions = prepared ? preparedAvailable(product) : null;
+    const existencias = prepared ? `<span class="recipe-tag">Receta · ${recipeLines(product).length} insumo${recipeLines(product).length === 1 ? '' : 's'}</span><br><small class="${portions === 0 ? 'text-danger' : 'muted'}">${portions === null ? 'Sin insumos' : portions === 0 ? 'Faltan insumos' : `Alcanza para ${portions}`}</small>` : stock ? `${formatQty(stock.qty)} ${escapeHtml(stock.unit)}` : '<span class="muted">Sin stock</span>';
+    return `<tr><td><strong>${escapeHtml(product.name)}</strong></td><td>${escapeHtml(product.category || 'Sin categoría')}</td><td>${money.format(cost)}${prepared ? '<br><small class="muted">Según receta</small>' : ''}${last}</td><td><strong>${money.format(product.price)}</strong></td><td><strong>${money.format(profit)}</strong></td><td>${cost ? `${margin.toFixed(1)}%` : '<span class="muted">—</span>'}</td><td>${existencias}</td><td><div class="product-actions"><button class="mini-action" data-edit-product="${product.id}">Editar</button><button class="mini-action delete-action" data-delete-product="${product.id}">Eliminar</button></div></td></tr>`;
   }).join('');
 }
 globalThis.renderProducts = renderProducts;
@@ -527,8 +535,20 @@ function savePurchase() {
   if (!supplierName || !invoice || !date) return showToast('Indica proveedor, número y fecha de la factura.');
   if (purchaseDraft.some(line => !line.productId || line.qty <= 0 || line.unitCost < 0)) return showToast('Revisa cantidades y costos de la factura.');
   const supplier = upsertSupplier(supplierName);
-  const lines = purchaseDraft.map(line => { const product = state.products.find(item => item.id === line.productId); return { ...line, productName: product.name, total: line.qty * line.unitCost }; });
+  if (purchaseDraft.some(line => !state.products.some(p => p.id === line.productId) && !insumoById(line.productId))) return showToast('Hay un producto o insumo que ya no existe en la factura.');
+  const lines = purchaseDraft.map(line => { const product = state.products.find(item => item.id === line.productId), ins = !product && insumoById(line.productId); return { ...line, productName: (product || ins).name, ...(ins ? { insumoId: ins.id, unit: line.unit || ins.unit } : {}), total: line.qty * line.unitCost }; });
   lines.forEach(line => {
+    if (line.insumoId) {
+      // Insumo: se compra en cualquier unidad compatible (bulto en kg, caja en und…); stock y costo promedio quedan en su unidad
+      const ins = insumoById(line.insumoId), qty = roundInsumoQty(convertUnits(line.qty, line.unit, ins.unit)), before = Math.max(0, Number(ins.qty) || 0), costBefore = Number(ins.cost) || 0;
+      if (!(qty > 0)) return;
+      const unitCost = line.total / qty;
+      ins.cost = Math.round((before > 0 && costBefore > 0 ? (before * costBefore + line.total) / (before + qty) : unitCost) * 100) / 100;
+      ins.lastCost = Math.round(unitCost * 100) / 100;
+      ins.qty = roundInsumoQty((Number(ins.qty) || 0) + qty); ins.updatedAt = Date.now();
+      line.avgCostAfter = ins.cost;
+      return;
+    }
     const product = state.products.find(item => item.id === line.productId), supply = state.inventory.find(item => item.id === product?.inventoryId);
     const stockBefore = supply ? Math.max(0, Number(supply.qty || 0)) : Math.max(0, Number(product?.stock || 0));
     const newStock = Number((stockBefore + line.qty).toFixed(2));
@@ -544,6 +564,7 @@ function savePurchase() {
       product.lastCost = line.unitCost;
     }
   });
+  refreshPreparedCosts(); // los platos cambian de costo con el nuevo promedio de sus insumos
   const total = lines.reduce((sum, line) => sum + line.total, 0);
   state.purchases.push({
     id: uid('buy'),
@@ -570,12 +591,184 @@ function savePurchase() {
   }
 }
 
-/* ============ Mermas, conteo físico y ajustes ============ */
+/* ============ Insumos y recetas ============
+   Insumos (state.insumos): ingredientes que no se venden solos. Cada uno tiene su unidad de manejo (kg, g, lb, L, ml, und):
+   en ella se guardan stock, mínimo y costo (cost = $ por esa unidad). No van en state.inventory, porque getPOSProducts
+   convierte en producto vendible todo artículo de inventario sin producto.
+   Producto preparado (tipo 'preparado'): sin stock propio ni artículo de inventario. Su receta (receta: [{ insumoId, qty, unit }],
+   por porción) descuenta insumos al cobrar y su costo es la suma de la receta. Se vende aunque falten insumos (stock negativo). */
+const INSUMO_UNITS = {
+  kg: { dim: 'masa', factor: 1000, label: 'kg' }, g: { dim: 'masa', factor: 1, label: 'g' }, lb: { dim: 'masa', factor: 500, label: 'lb (500 g)' },
+  L: { dim: 'volumen', factor: 1000, label: 'L' }, ml: { dim: 'volumen', factor: 1, label: 'ml' }, und: { dim: 'unidad', factor: 1, label: 'und' }
+};
+function compatibleUnits(unit) { const dim = INSUMO_UNITS[unit]?.dim; return Object.keys(INSUMO_UNITS).filter(u => INSUMO_UNITS[u].dim === dim); }
+function convertUnits(qty, from, to) { const a = INSUMO_UNITS[from], b = INSUMO_UNITS[to]; return a && b && a.dim === b.dim ? (Number(qty) || 0) * a.factor / b.factor : (Number(qty) || 0); }
+function roundInsumoQty(n) { return Math.round((Number(n) || 0) * 10000) / 10000; }
+function insumoById(id) { return (state.insumos || []).find(i => i.id === id) || null; }
+function isPrepared(product) { return product?.tipo === 'preparado'; }
+function recipeLines(source) { return Array.isArray(source?.receta) ? source.receta.filter(l => l && l.insumoId && Number(l.qty) > 0) : []; }
+function recipeLineUse(line, insumo = insumoById(line.insumoId)) { return insumo ? convertUnits(line.qty, line.unit || insumo.unit, insumo.unit) : 0; } // en la unidad del insumo
+function recipeCost(source) { return Math.round(recipeLines(source).reduce((sum, line) => { const ins = insumoById(line.insumoId); return sum + (ins ? recipeLineUse(line, ins) * (Number(ins.cost) || 0) : 0); }, 0)); }
+// Porciones que alcanzan con el stock actual (null = receta vacía)
+function preparedAvailable(product) {
+  let min = Infinity;
+  recipeLines(product).forEach(line => { const ins = insumoById(line.insumoId), use = recipeLineUse(line, ins); if (ins && use > 0) min = Math.min(min, Math.floor((Number(ins.qty) || 0) / use + 1e-9)); });
+  return Number.isFinite(min) ? Math.max(0, min) : null;
+}
+// soldQty > 0 descuenta, < 0 devuelve. Sin tope en 0: vender sin insumos deja el stock en negativo (se corrige con compras o conteo).
+function consumeRecipe(source, soldQty) {
+  if (!soldQty) return;
+  recipeLines(source).forEach(line => { const ins = insumoById(line.insumoId); if (!ins) return; ins.qty = roundInsumoQty((Number(ins.qty) || 0) - recipeLineUse(line, ins) * soldQty); ins.updatedAt = Date.now(); });
+}
+// El costo de un preparado sigue al de sus insumos (cambia con cada compra)
+function refreshPreparedCosts() { (state.products || []).filter(isPrepared).forEach(p => { const cost = recipeCost(p); if (cost !== Number(p.cost)) { p.cost = cost; p.sync_status = 'pending'; } }); }
+function insumoStatus(ins) { return ins.qty <= 0 ? ['status-out', 'Agotado'] : ins.qty <= ins.min ? ['status-low', 'Bajo stock'] : ['status-good', 'Disponible']; }
+function insumoUsage(id) { return (state.products || []).filter(p => isPrepared(p) && recipeLines(p).some(l => l.insumoId === id)); }
+
+let editingInsumoId = null;
+function openInsumoDialog(id = null) {
+  const ins = id ? insumoById(id) : null; editingInsumoId = ins?.id || null;
+  const unitEl = document.querySelector('#insumoUnit');
+  unitEl.innerHTML = (ins ? compatibleUnits(ins.unit) : Object.keys(INSUMO_UNITS)).map(u => `<option value="${u}">${INSUMO_UNITS[u].label}</option>`).join('');
+  unitEl.value = ins?.unit || 'kg';
+  document.querySelector('#insumoName').value = ins?.name || '';
+  document.querySelector('#insumoQty').value = ins ? roundInsumoQty(ins.qty) : '';
+  document.querySelector('#insumoQty').disabled = Boolean(ins); // con el insumo creado, el stock cambia por compras, ajustes, mermas o conteo
+  document.querySelector('#insumoMin').value = ins ? roundInsumoQty(ins.min) : '';
+  document.querySelector('#insumoCost').value = ins ? Math.round(ins.cost) : '';
+  document.querySelector('#insumoDialog h2').textContent = ins ? 'Editar insumo' : 'Nuevo insumo';
+  document.querySelector('#deleteInsumoButton').hidden = !ins;
+  updateInsumoUnitLabels();
+  document.querySelector('#insumoDialog').showModal();
+}
+function updateInsumoUnitLabels() { const unit = document.querySelector('#insumoUnit')?.value || 'kg'; document.querySelectorAll('[data-insumo-unit-label]').forEach(el => { el.textContent = unit; }); }
+function saveInsumo() {
+  const name = document.querySelector('#insumoName').value.trim(), unit = document.querySelector('#insumoUnit').value;
+  const qty = Number(document.querySelector('#insumoQty').value || 0), min = Number(document.querySelector('#insumoMin').value || 0), cost = Number(document.querySelector('#insumoCost').value || 0);
+  if (!name || !INSUMO_UNITS[unit]) return showToast('Escribe el nombre y la unidad del insumo.');
+  if (qty < 0 || min < 0 || cost < 0) return showToast('Las cantidades y el costo no pueden ser negativos.');
+  if ((state.insumos || []).some(i => i.id !== editingInsumoId && i.name.toLowerCase() === name.toLowerCase())) return showToast('Ya existe un insumo con ese nombre.');
+  let ins = editingInsumoId && insumoById(editingInsumoId);
+  if (ins) {
+    // Cambio de unidad (misma magnitud): el stock se convierte; mínimo y costo se escriben ya en la unidad nueva
+    if (unit !== ins.unit) ins.qty = roundInsumoQty(convertUnits(ins.qty, ins.unit, unit));
+    Object.assign(ins, { name, unit, min, cost, updatedAt: Date.now() });
+  } else {
+    ins = { id: uid('ins'), name, unit, qty, min, cost, createdAt: Date.now() };
+    state.insumos = [...(state.insumos || []), ins];
+    if (qty) logStock({ type: 'ajuste', reasonCategory: 'Stock inicial', itemId: ins.id, itemName: name, unit, delta: qty, cost, value: qty * cost, reason: 'Stock inicial' });
+  }
+  refreshPreparedCosts(); saveState(); document.querySelector('#insumoDialog').close(); renderAll();
+  showToast(editingInsumoId ? 'Insumo actualizado.' : 'Insumo creado.');
+}
+function deleteInsumo(id = editingInsumoId) {
+  const ins = insumoById(id); if (!ins) return;
+  const used = insumoUsage(id);
+  if (used.length) return showToast(`${ins.name} está en la receta de ${used.map(p => p.name).slice(0, 3).join(', ')}${used.length > 3 ? '…' : ''}. Quítalo de esas recetas primero.`);
+  if (!window.confirm(`¿Eliminar el insumo ${ins.name}?`)) return;
+  state.insumos = state.insumos.filter(i => i.id !== id);
+  logAudit('Insumo eliminado', `${ins.name} · ${formatQty(ins.qty)} ${ins.unit}`);
+  saveState(); document.querySelector('#insumoDialog')?.close(); renderAll(); showToast('Insumo eliminado.');
+}
+function renderInsumos() {
+  const tbody = document.querySelector('#insumosTable'); if (!tbody) return;
+  const list = [...(state.insumos || [])].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  tbody.innerHTML = list.length ? list.map(ins => {
+    const [cls, label] = insumoStatus(ins), used = insumoUsage(ins.id).length;
+    return `<tr><td><strong>${escapeHtml(ins.name)}</strong><br><small class="muted">${used ? `En ${used} receta${used === 1 ? '' : 's'}` : 'Sin recetas'}</small></td><td><b>${formatQty(roundInsumoQty(ins.qty))}</b> ${escapeHtml(ins.unit)}</td><td>${formatQty(roundInsumoQty(ins.min))} ${escapeHtml(ins.unit)}</td><td>${money.format(ins.cost || 0)} / ${escapeHtml(ins.unit)}</td><td><span class="status ${cls}">${label}</span></td><td><div class="product-actions"><button class="mini-action" data-edit-insumo="${ins.id}">Editar</button><button class="mini-action" data-adjust="${ins.id}">Ajustar</button></div></td></tr>`;
+  }).join('') : '<tr><td colspan="6" class="muted" style="text-align:center;padding:28px 16px;">Aún no hay insumos. Crea los ingredientes de tus platos (arroz, carne, aceite…) para armar sus recetas.</td></tr>';
+}
+
+/* Receta en el formulario de producto (recipeDraft mientras está abierto) */
+let recipeDraft = [];
+function fillProductRecipe(product) {
+  const prepared = isPrepared(product);
+  document.querySelector('#productType').value = prepared ? 'preparado' : 'reventa';
+  recipeDraft = prepared ? structuredClone(recipeLines(product)) : [];
+  toggleProductType();
+}
+function toggleProductType() {
+  const prepared = document.querySelector('#productType').value === 'preparado';
+  document.querySelector('#productStockFields').hidden = prepared;
+  document.querySelector('#productRecipeFields').hidden = !prepared;
+  const costEl = document.querySelector('#productCost'); costEl.readOnly = prepared; costEl.title = prepared ? 'Se calcula con la receta' : '';
+  if (prepared && !recipeDraft.length && (state.insumos || []).length) addRecipeLine();
+  else renderRecipeDraft();
+}
+function addRecipeLine() {
+  const first = (state.insumos || [])[0];
+  if (!first) return showToast('Primero crea insumos en Inventario → Insumos.');
+  recipeDraft.push({ insumoId: first.id, qty: 0, unit: defaultRecipeUnit(first.unit) });
+  renderRecipeDraft();
+}
+// En recetas se piensa en gramos y mililitros
+function defaultRecipeUnit(unit) { return { kg: 'g', lb: 'g', L: 'ml' }[unit] || unit; }
+function renderRecipeDraft() {
+  const box = document.querySelector('#recipeLines'); if (!box) return;
+  const insumos = [...(state.insumos || [])].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  box.innerHTML = recipeDraft.length ? recipeDraft.map((line, index) => {
+    const ins = insumoById(line.insumoId), units = ins ? compatibleUnits(ins.unit) : [line.unit];
+    const lineCost = ins ? recipeLineUse(line, ins) * (Number(ins.cost) || 0) : 0;
+    return `<div class="recipe-line"><select data-recipe-index="${index}" data-recipe-field="insumoId" aria-label="Insumo">${insumos.map(i => `<option value="${i.id}"${i.id === line.insumoId ? ' selected' : ''}>${escapeHtml(i.name)}</option>`).join('')}</select><input data-recipe-index="${index}" data-recipe-field="qty" type="number" min="0" step="any" inputmode="decimal" value="${line.qty || ''}" placeholder="0" aria-label="Cantidad por porción" /><select data-recipe-index="${index}" data-recipe-field="unit" aria-label="Unidad">${units.map(u => `<option value="${u}"${u === line.unit ? ' selected' : ''}>${u}</option>`).join('')}</select><span class="recipe-line-cost">${money.format(Math.round(lineCost))}</span><button type="button" class="remove-line" data-remove-recipe-line="${index}" aria-label="Quitar insumo">×</button></div>`;
+  }).join('') : `<p class="muted recipe-empty">${(state.insumos || []).length ? 'Agrega los insumos de una porción.' : 'Aún no hay insumos: créalos en Inventario → Insumos.'}</p>`;
+  updateRecipeSummary();
+}
+function updateRecipeSummary() {
+  const el = document.querySelector('#recipeSummary'); if (!el) return;
+  const cost = recipeCost({ receta: recipeDraft }), price = Number(document.querySelector('#productPrice')?.value || 0), profit = price - cost;
+  if (document.querySelector('#productType')?.value === 'preparado') document.querySelector('#productCost').value = cost;
+  el.innerHTML = `<span>Costo por porción <b>${money.format(cost)}</b></span>${price ? `<span>Ganancia <b>${money.format(profit)}</b></span><span>Costo ${Math.round(cost / price * 100)}% del precio</span>` : ''}`;
+}
+function updateRecipeDraft(target) {
+  const line = recipeDraft[Number(target.dataset.recipeIndex)]; if (!line) return;
+  const field = target.dataset.recipeField;
+  if (field === 'insumoId') { const ins = insumoById(target.value); line.insumoId = target.value; if (ins && !compatibleUnits(ins.unit).includes(line.unit)) line.unit = defaultRecipeUnit(ins.unit); return renderRecipeDraft(); }
+  if (field === 'unit') { line.unit = target.value; return renderRecipeDraft(); }
+  line.qty = Number(target.value || 0);
+  const cost = target.closest?.('.recipe-line')?.querySelector('.recipe-line-cost'), ins = insumoById(line.insumoId);
+  if (cost && ins) cost.textContent = money.format(Math.round(recipeLineUse(line, ins) * (Number(ins.cost) || 0)));
+  updateRecipeSummary();
+}
+function removeRecipeLine(index) { recipeDraft.splice(Number(index), 1); renderRecipeDraft(); }
+// Guarda un producto preparado (lo llama saveProduct cuando el tipo es «Preparado con receta»)
+function savePreparedProduct({ name, category, price, editingId }) {
+  const receta = recipeDraft.filter(l => insumoById(l.insumoId) && Number(l.qty) > 0).map(l => ({ insumoId: l.insumoId, qty: Number(l.qty), unit: l.unit }));
+  if (!name || !(price > 0)) return showToast('Completa nombre y precio de venta.');
+  if (!receta.length) return showToast('Agrega al menos un insumo con su cantidad a la receta.');
+  if (!state.categories.includes(category)) state.categories.push(category);
+  let product = editingId && state.products.find(p => p.id === editingId);
+  if (product && product.inventoryId) {
+    // Pasa de reventa a preparado: su stock propio deja de existir (si no, getPOSProducts lo volvería un producto aparte)
+    const supply = state.inventory.find(i => i.id === product.inventoryId);
+    if (supply && supply.qty > 0 && !window.confirm(`${product.name} tiene ${formatQty(supply.qty)} ${supply.unit} en stock propio. Un plato preparado no lleva stock propio: se descuentan sus insumos. ¿Continuar?`)) return;
+    state.inventory = state.inventory.filter(i => i.id !== product.inventoryId);
+    delete product.inventoryId;
+  }
+  const fields = { name, category, price, cost: recipeCost({ receta }), tipo: 'preparado', receta, recipe: {}, image: pendingProductImage, sync_status: 'pending' };
+  if (product) Object.assign(product, fields);
+  else { product = { id: uid('prod'), icon: '🍽️', ...fields }; state.products.push(product); }
+  saveState(); document.querySelector('#productDialog').close(); renderAll();
+  showToast(editingId ? 'Plato actualizado.' : 'Plato creado con su receta.');
+  return product;
+}
+globalThis.isPrepared = isPrepared;
+globalThis.preparedAvailable = preparedAvailable;
+globalThis.consumeRecipe = consumeRecipe;
+globalThis.recipeCost = recipeCost;
+
+/* ============ Mermas, conteo físico y ajustes ============
+   Trabajan sobre productos de reventa (state.inventory) e insumos (state.insumos) por igual. */
+function stockItems() { return [...(state.inventory || []), ...(state.insumos || [])]; }
+function findStockItem(id) { return (state.inventory || []).find(i => i.id === id) || insumoById(id); }
+function stockItemOptions(label = i => `${i.name} (${formatQty(roundInsumoQty(i.qty))} ${i.unit})`) {
+  const group = (title, list) => list.length ? `<optgroup label="${title}">${list.map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(label(i))}</option>`).join('')}</optgroup>` : '';
+  return group('Productos', state.inventory || []) + group('Insumos', state.insumos || []);
+}
 function supplyProduct(supplyId) {
   return state.products.find(p => p.inventoryId === supplyId || p.id === supplyId);
 }
 function supplyUnitCost(supplyId) {
-  return Number(supplyProduct(supplyId)?.cost || 0);
+  return Number(supplyProduct(supplyId)?.cost ?? insumoById(supplyId)?.cost ?? 0);
 }
 function supplyUnitPrice(supplyId) {
   return Number(supplyProduct(supplyId)?.price || 0);
@@ -626,7 +819,7 @@ globalThis.reportSheets = reportSheets;
 globalThis.exportReportXlsx = exportReportXlsx;
 function saveInventory() {
   if (!requireOpenShift()) return;
-  const item = state.inventory.find(i => i.id === document.querySelector('#inventorySelect').value), delta = Number(document.querySelector('#inventoryAmount').value), reason = document.querySelector('#inventoryReason').value.trim();
+  const item = findStockItem(document.querySelector('#inventorySelect').value), delta = Number(document.querySelector('#inventoryAmount').value), reason = document.querySelector('#inventoryReason').value.trim();
   if (!item || !delta) return showToast('Indica una cantidad válida.');
   const before = item.qty; item.qty = Math.max(0, Number((item.qty + delta).toFixed(2))); const real = Number((item.qty - before).toFixed(2));
   const p = supplyProduct(item.id);
@@ -641,10 +834,7 @@ function saveInventory() {
 }
 function openWasteDialog() {
   if (!can('merma')) return deny();
-  document.querySelector('#wasteItem').innerHTML = state.inventory.map(i => {
-    const p = supplyProduct(i.id);
-    return `<option value="${i.id}">${escapeHtml(i.name)} (Stock: ${formatQty(i.qty)} ${escapeHtml(i.unit)} · Costo: ${money.format(p?.cost || 0)})</option>`;
-  }).join('');
+  document.querySelector('#wasteItem').innerHTML = stockItemOptions(i => `${i.name} (Stock: ${formatQty(roundInsumoQty(i.qty))} ${i.unit} · Costo: ${money.format(supplyUnitCost(i.id))})`);
   document.querySelector('#wasteQty').value = '';
   document.querySelector('#wasteNote').value = '';
   document.querySelector('#wasteReason').value = 'Rotura / Merma';
@@ -652,7 +842,7 @@ function openWasteDialog() {
   document.querySelector('#wasteDialog').showModal();
 }
 function updateWasteValue() {
-  const item = state.inventory.find(i => i.id === document.querySelector('#wasteItem')?.value);
+  const item = findStockItem(document.querySelector('#wasteItem')?.value);
   const qty = Number(document.querySelector('#wasteQty')?.value || 0);
   const el = document.querySelector('#wasteValue');
   if (!el) return;
@@ -666,7 +856,7 @@ function updateWasteValue() {
 }
 function saveWaste() {
   if (!can('merma')) return deny();
-  const item = state.inventory.find(i => i.id === document.querySelector('#wasteItem')?.value);
+  const item = findStockItem(document.querySelector('#wasteItem')?.value);
   const qty = Number(document.querySelector('#wasteQty')?.value);
   const reason = document.querySelector('#wasteReason')?.value || 'Rotura / Merma';
   const note = document.querySelector('#wasteNote')?.value.trim() || '';
@@ -708,13 +898,13 @@ function saveWaste() {
 }
 function openCountDialog() {
   if (!can('conteo')) return deny();
-  document.querySelector('#countBody').innerHTML = state.inventory.map(i => `<tr data-count-row="${i.id}"><td><strong>${escapeHtml(i.name)}</strong><br><small class="muted">${escapeHtml(i.unit)}</small></td><td>${formatQty(i.qty)}</td><td><input type="number" min="0" step="0.01" inputmode="decimal" data-count-item="${i.id}" placeholder="—" /></td><td class="count-diff" data-count-diff="${i.id}">—</td></tr>`).join('');
+  document.querySelector('#countBody').innerHTML = stockItems().map(i => `<tr data-count-row="${i.id}"><td><strong>${escapeHtml(i.name)}</strong><br><small class="muted">${escapeHtml(i.unit)}</small></td><td>${formatQty(i.qty)}</td><td><input type="number" min="0" step="0.01" inputmode="decimal" data-count-item="${i.id}" placeholder="—" /></td><td class="count-diff" data-count-diff="${i.id}">—</td></tr>`).join('');
   document.querySelector('#countNote').value = ''; updateCountTotals(); document.querySelector('#countDialog').showModal();
 }
 function countLines() {
   const lines = [];
   document.querySelectorAll('#countBody input[data-count-item]').forEach(input => {
-    if (input.value === '') return; const item = state.inventory.find(i => i.id === input.dataset.countItem), counted = Number(input.value); if (!item || !Number.isFinite(counted) || counted < 0) return;
+    if (input.value === '') return; const item = findStockItem(input.dataset.countItem), counted = Number(input.value); if (!item || !Number.isFinite(counted) || counted < 0) return;
     lines.push({ item, counted, diff: Number((counted - item.qty).toFixed(2)) });
   });
   return lines;
@@ -1513,7 +1703,7 @@ function initModules() {
   ['openCategoriesDialog', 'addCategory', 'saveCategory', 'deleteCategory'].forEach(n => guard(n, 'categories'));
   ['saveProfile'].forEach(n => guard(n, 'profile')); ['exportBackup', 'importBackup'].forEach(n => guard(n, 'backup'));
   ['openPurchaseDialog', 'savePurchase', 'openExpenseDialog', 'saveExpense'].forEach(n => guard(n, 'purchases'));
-  ['openInventoryDialog', 'saveInventory'].forEach(n => guard(n, 'inventory'));
+  ['openInventoryDialog', 'saveInventory', 'openInsumoDialog', 'saveInsumo', 'deleteInsumo'].forEach(n => guard(n, 'inventory'));
   guard('deleteCurrentOrder', 'cancelOrder');
   ['openExpenseDialog', 'saveExpense'].forEach(n => planGuard(n, 'expenses')); // seguimiento de gastos: Plan Pro
   const closeShift = globalThis.confirmClose; // al cerrar caja se respalda toda la base de datos

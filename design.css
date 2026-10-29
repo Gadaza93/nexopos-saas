@@ -1461,6 +1461,36 @@ html[data-theme="light"] .login-dialog::backdrop { background: radial-gradient(5
 .print-printer-row .outline-button { min-height: 40px; padding: 0 12px; }
 .print-settings-card .check-row { margin-bottom: 12px; }
 
+/* ---------- Insumos y recetas ---------- */
+.card-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.card-title-row h3 { margin: 0 0 4px; }
+.card-title-row p { margin: 0; }
+.card-title-row .primary-button { flex: 0 0 auto; }
+.insumos-card { margin-top: 16px; }
+.insumo-hint { margin: 10px 0 14px; font-size: 12px; }
+.dialog-actions-row { display: flex; gap: 10px; align-items: stretch; }
+.dialog-actions-row .primary-button.full { flex: 1; }
+.recipe-fields { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); }
+.recipe-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.recipe-head .field-label { margin: 0; }
+.recipe-head .outline-button { min-height: 34px; padding: 0 12px; }
+.recipe-lines { display: grid; gap: 6px; max-height: 220px; overflow: auto; }
+.recipe-line { display: grid; grid-template-columns: minmax(0, 1fr) 72px 62px 74px 26px; gap: 6px; align-items: center; }
+.recipe-line select, .recipe-line input { margin: 0; min-width: 0; }
+.recipe-line-cost { font-size: 12px; font-weight: 700; color: var(--muted); text-align: right; white-space: nowrap; }
+.recipe-empty { margin: 4px 0; font-size: 13px; }
+.recipe-summary { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-strong); font-size: 13px; color: var(--text-2); }
+.recipe-summary b { color: var(--text); }
+.recipe-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); font-size: 11px; font-weight: 800; }
+.text-danger { color: var(--danger); }
+.purchase-line.with-unit { grid-template-columns: minmax(0, 1fr) 64px 58px 86px 26px; }
+@media (max-width: 680px) {
+  .recipe-line { grid-template-columns: minmax(0, 1fr) 58px 68px 26px; }
+  .recipe-line-cost { display: none; }
+  .purchase-line.with-unit { grid-template-columns: minmax(0, 1fr) 52px 52px 72px 26px; }
+  .card-title-row { flex-direction: column; }
+}
+
 /* ---------- Comandas de cocina ---------- */
 .kitchen-send-button { width: 100%; min-height: 42px; margin-top: 10px; font-weight: 800; border-color: var(--accent-line); color: var(--accent-strong); }
 .kitchen-send-button:disabled { border-color: var(--line); color: var(--muted); cursor: default; }

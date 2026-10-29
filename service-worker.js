@@ -1,4 +1,4 @@
-const CACHE = 'nexopos-v44';
+const CACHE = 'nexopos-v45';
 const ASSETS = [
   './',
   './index.html',

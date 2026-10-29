@@ -94,6 +94,7 @@
           <div class="section-heading"><div><h2>Inventario</h2><p>Existencias locales y alertas de stock mínimo.</p></div><div class="inline-actions"><button id="purchaseSuggestButton" class="outline-button">Sugerido de Compra / Proveedores</button><button id="newCountButton" class="outline-button" data-perm="conteo">Conteo físico</button><button id="newWasteButton" class="primary-button highlight-btn" data-perm="merma">Registrar Ajuste / Merma</button><button id="adjustInventoryButton" class="outline-button">Ajustar existencias</button></div></div>
           <div class="inventory-summary" id="inventorySummary"></div>
           <div class="data-card"><table><thead><tr><th>Producto</th><th>Disponible</th><th>Mínimo</th><th>Estado</th><th></th></tr></thead><tbody id="inventoryTable"></tbody></table></div>
+          <div class="data-card insumos-card"><div class="card-title-row"><div><h3>Insumos</h3><p class="muted">Ingredientes de tus platos. Se descuentan por receta al cobrar; se suman con facturas de compra.</p></div><button id="newInsumoButton" class="primary-button" type="button" data-perm="inventory">+ Nuevo insumo</button></div><table><thead><tr><th>Insumo</th><th>Disponible</th><th>Mínimo</th><th>Costo promedio</th><th>Estado</th><th></th></tr></thead><tbody id="insumosTable"></tbody></table></div>
           <div class="data-card stock-log-card"><h3>Historial de Ajustes de Stock (Mermas, cortesías y conteos)</h3><table><thead><tr><th>Fecha y hora</th><th>Motivo / Tipo</th><th>Producto</th><th>Cantidad</th><th>Valor costo</th><th>Valor venta</th><th>Observación</th><th>Responsable</th></tr></thead><tbody id="stockLogTable"></tbody></table></div>
         </section>
 
@@ -416,10 +417,27 @@
       <div class="dialog-header"><div><p class="eyebrow">CATÁLOGO</p><h2>Nuevo producto</h2></div><button class="icon-button" data-close="productDialog" aria-label="Cerrar">×</button></div>
       <label class="field-label" for="productName">Nombre del producto</label><input id="productName" type="text" placeholder="Ej. Bandeja paisa" />
       <label class="field-label" for="productCategory">Categoría</label><input id="productCategory" type="text" list="categoryOptions" placeholder="Ej. Platos fuertes" /><datalist id="categoryOptions"><option>Entradas</option><option>Platos fuertes</option><option>Cafetería</option><option>Bebidas</option><option>Postres</option></datalist>
+      <label class="field-label" for="productType">Tipo de producto</label><select id="productType"><option value="reventa">De reventa (se compra y se vende igual: gaseosas, agua…)</option><option value="preparado">Preparado con receta (descuenta insumos al venderlo)</option></select>
       <div class="two-fields"><div><label class="field-label" for="productCost">Precio de costo</label><input id="productCost" type="number" min="0" inputmode="numeric" placeholder="$0" /></div><div><label class="field-label" for="productPrice">Precio de venta</label><input id="productPrice" type="number" min="0" inputmode="numeric" placeholder="$0" /></div></div>
-      <div class="three-fields"><div><label class="field-label" for="productStock">Stock actual</label><input id="productStock" type="number" min="0" step="0.1" placeholder="0" /></div><div><label class="field-label" for="productMinStock">Stock mínimo</label><input id="productMinStock" type="number" min="0" step="0.1" placeholder="0" /></div><div><label class="field-label" for="productUnit">Unidad</label><select id="productUnit"><option value="und">Unidad</option><option value="botella">Botella</option><option value="L">Litro</option><option value="porción">Porción</option></select></div></div>
+      <div id="productStockFields">
+        <div class="three-fields"><div><label class="field-label" for="productStock">Stock actual</label><input id="productStock" type="number" min="0" step="0.1" placeholder="0" /></div><div><label class="field-label" for="productMinStock">Stock mínimo</label><input id="productMinStock" type="number" min="0" step="0.1" placeholder="0" /></div><div><label class="field-label" for="productUnit">Unidad</label><select id="productUnit"><option value="und">Unidad</option><option value="botella">Botella</option><option value="L">Litro</option><option value="porción">Porción</option></select></div></div>
+      </div>
+      <div id="productRecipeFields" class="recipe-fields" hidden>
+        <div class="recipe-head"><span class="field-label">Receta por porción</span><button type="button" id="addRecipeLineButton" class="outline-button">+ Insumo</button></div>
+        <div id="recipeLines" class="recipe-lines"></div>
+        <div id="recipeSummary" class="recipe-summary"></div>
+      </div>
       <label class="field-label" for="productImage">Imagen del producto</label><div class="product-image-input"><div id="productImagePreview" class="product-image-preview">🍾</div><label class="outline-button file-button">Seleccionar imagen<input id="productImage" type="file" accept="image/*" hidden /></label></div>
       <button id="saveProductButton" class="primary-button full">Crear producto e inventario</button>
+    </dialog>
+
+    <dialog id="insumoDialog" class="small-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">INVENTARIO</p><h2>Nuevo insumo</h2></div><button class="icon-button" data-close="insumoDialog" aria-label="Cerrar">×</button></div>
+      <label class="field-label" for="insumoName">Nombre</label><input id="insumoName" type="text" maxlength="60" placeholder="Ej. Arroz, Pechuga, Aceite" />
+      <label class="field-label" for="insumoUnit">Unidad de manejo (en la que lo cuentas en bodega)</label><select id="insumoUnit"></select>
+      <div class="three-fields"><div><label class="field-label" for="insumoQty">Stock actual (<span data-insumo-unit-label>kg</span>)</label><input id="insumoQty" type="number" min="0" step="any" inputmode="decimal" placeholder="0" /></div><div><label class="field-label" for="insumoMin">Mínimo (<span data-insumo-unit-label>kg</span>)</label><input id="insumoMin" type="number" min="0" step="any" inputmode="decimal" placeholder="0" /></div><div><label class="field-label" for="insumoCost">Costo por <span data-insumo-unit-label>kg</span></label><input id="insumoCost" type="number" min="0" inputmode="numeric" placeholder="$0" /></div></div>
+      <p class="muted insumo-hint">Las recetas pueden usar otra unidad de la misma magnitud (g si lo manejas en kg, ml si es en L). El stock de un insumo creado cambia con compras, ajustes, mermas o conteo.</p>
+      <div class="dialog-actions-row"><button id="deleteInsumoButton" class="danger-outline-button" type="button" hidden>Eliminar</button><button id="saveInsumoButton" class="primary-button full" type="button">Guardar insumo</button></div>
     </dialog>
 
     <dialog id="purchaseDialog" class="small-dialog purchase-dialog">
