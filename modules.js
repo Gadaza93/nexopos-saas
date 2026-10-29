@@ -308,6 +308,7 @@ function renderInvoices() {
 /* Ajusta el inventario cuando cambia lo vendido: soldDelta > 0 descuenta, < 0 devuelve. */
 function adjustSoldStock(item, soldDelta) {
   if (!soldDelta) return;
+  consumeModifiers(item, soldDelta); // insumos de las adiciones (adición de queso…)
   const nowIso = new Date().toISOString();
   const apply = (supply, amount) => { supply.qty = Math.max(0, Number((supply.qty - amount).toFixed(2))); };
   const prod = state.products.find(p => p.id === (item.productId || item.id) || (item.inventoryId && p.inventoryId === item.inventoryId));
@@ -393,7 +394,7 @@ function renderInvoiceDraft() {
 }
 function addInvoiceLine() {
   if (!invoiceDraft) return; const product = state.products.find(p => p.id === document.querySelector('#invoiceAddProduct').value); if (!product) return;
-  const found = invoiceDraft.items.find(i => i.productId === product.id);
+  const found = invoiceDraft.items.find(i => lineKey(i) === product.id); // una línea sin adiciones
   if (found) found.qty = Number(found.qty) + 1; else invoiceDraft.items.push({ productId: product.id, name: product.name, price: product.price, cost: Number(product.cost || 0), qty: 1, inventoryId: product.inventoryId, recipe: product.recipe, category: product.category, ...(isPrepared(product) ? { tipo: 'preparado', receta: structuredClone(recipeLines(product)) } : {}) });
   renderInvoiceDraft();
 }
@@ -425,12 +426,13 @@ function saveInvoiceEdit() {
   const before = { customer: payment.customer, method: payment.method, amount: payment.amount, items: structuredClone(payment.items || []), payments: structuredClone(payment.payments || []) };
   if (!payment.splitShare) {
     const oldQty = {}, newQty = {}, sample = {};
-    before.items.forEach(i => { oldQty[i.productId] = (oldQty[i.productId] || 0) + i.qty; sample[i.productId] = i; });
-    items.forEach(i => { newQty[i.productId] = (newQty[i.productId] || 0) + i.qty; sample[i.productId] = i; });
+    // Por línea: una adición cambia lo que se descuenta (lineKey); la nube sigue contando por producto (productId)
+    before.items.forEach(i => { const k = lineKey(i); oldQty[k] = (oldQty[k] || 0) + i.qty; sample[k] = i; });
+    items.forEach(i => { const k = lineKey(i); newQty[k] = (newQty[k] || 0) + i.qty; sample[k] = i; });
     new Set([...Object.keys(oldQty), ...Object.keys(newQty)]).forEach(id => {
       const soldDelta = (newQty[id] || 0) - (oldQty[id] || 0);
       adjustSoldStock(sample[id], soldDelta);
-      globalThis.NexoSync?.addSaleStockDelta?.(payment, id, soldDelta); // la nube aplica la misma diferencia al subir la factura
+      globalThis.NexoSync?.addSaleStockDelta?.(payment, sample[id].productId, soldDelta); // la nube aplica la misma diferencia al subir la factura
     });
   }
   payment.items = items; payment.amount = newAmount;
@@ -517,6 +519,7 @@ function deleteSupplier(id) {
 
 /* Productos: costo promedio ponderado (ya no solo el último costo). */
 function renderProducts() {
+  renderModifierGroups();
   const tbody = document.querySelector('#productsTable');
   if (!state.products || state.products.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:36px 16px;font-size:14px;">No hay productos registrados. Crea uno nuevo o importa tu archivo Excel.</td></tr>';
@@ -759,6 +762,129 @@ globalThis.isPrepared = isPrepared;
 globalThis.preparedAvailable = preparedAvailable;
 globalThis.consumeRecipe = consumeRecipe;
 globalThis.recipeCost = recipeCost;
+
+/* ============ Adiciones y modificadores ============
+   Grupos reutilizables en state.profile.modifierGroups (viajan en negocios.configuracion con el perfil, sin migración):
+   { id, name, mode: 'una' | 'una-opcional' | 'varias', options: [{ id, name, price, insumoId?, qty?, unit? }], productIds }.
+   Al agregar un producto con grupos se eligen las opciones; la línea del pedido lleva lineId propio (producto + opciones),
+   modifiers (copia de lo elegido), price = precio + adiciones, cost con los insumos de las adiciones y name con las
+   opciones: totales, recibo, comanda, división de cuenta y reportes funcionan sin cambios. Al cobrar, las opciones con
+   insumo lo descuentan (consumeModifiers, desde deductInventory y adjustSoldStock). */
+const MODIFIER_MODES = { una: 'Elegir una (obligatorio)', 'una-opcional': 'Elegir una (opcional)', varias: 'Elegir varias (opcional)' };
+function modifierGroups() { return Array.isArray(state.profile?.modifierGroups) ? state.profile.modifierGroups : []; }
+function productModifierGroups(productId) { return modifierGroups().filter(g => (g.productIds || []).includes(productId) && (g.options || []).length); }
+function modifiersLabel(mods) { return (mods || []).map(m => (Number(m.price) > 0 ? `+ ${m.name}` : m.name)).join(', '); }
+function modifiersLineId(productId, mods) { return mods?.length ? `${productId}|${mods.map(m => m.optionId).sort().join(',')}` : String(productId); }
+function modifiersRecipe(mods) { return { receta: (mods || []).filter(m => m.insumoId && Number(m.qty) > 0).map(m => ({ insumoId: m.insumoId, qty: Number(m.qty), unit: m.unit })) }; }
+function modifiersCost(mods) { return recipeCost(modifiersRecipe(mods)); }
+function consumeModifiers(item, qty) { if (item?.modifiers?.length) consumeRecipe(modifiersRecipe(item.modifiers), qty); }
+
+/* Elegir opciones al agregar el producto al pedido */
+let modifierPick = null; // { productId, selected: { groupId: [optionId] } }
+function openModifierDialog(productId) {
+  const product = state.products.find(p => p.id === productId); if (!product) return;
+  modifierPick = { productId, selected: {} };
+  document.querySelector('#modifierPickTitle').textContent = product.name;
+  renderModifierPick();
+  document.querySelector('#modifierPickDialog').showModal();
+}
+function renderModifierPick() {
+  if (!modifierPick) return;
+  const product = state.products.find(p => p.id === modifierPick.productId), groups = productModifierGroups(modifierPick.productId);
+  document.querySelector('#modifierPickGroups').innerHTML = groups.map(g => {
+    const chosen = modifierPick.selected[g.id] || [], multi = g.mode === 'varias';
+    return `<fieldset class="modifier-group"><legend>${escapeHtml(g.name)} <small class="${g.mode === 'una' ? 'required' : 'muted'}">${g.mode === 'una' ? 'Obligatorio' : multi ? 'Puedes elegir varias' : 'Opcional'}</small></legend>${g.options.map(o => `<button type="button" class="modifier-option${chosen.includes(o.id) ? ' active' : ''}" data-modifier-group="${escapeHtml(g.id)}" data-modifier-option="${escapeHtml(o.id)}"><span>${escapeHtml(o.name)}</span>${Number(o.price) > 0 ? `<b>+ ${money.format(o.price)}</b>` : ''}</button>`).join('')}</fieldset>`;
+  }).join('');
+  const mods = pickedModifiers(), total = Number(product?.price || 0) + mods.reduce((s, m) => s + (Number(m.price) || 0), 0);
+  document.querySelector('#modifierPickTotal').textContent = money.format(total);
+}
+function toggleModifierOption(groupId, optionId) {
+  const g = modifierGroups().find(x => x.id === groupId); if (!g || !modifierPick) return;
+  const chosen = modifierPick.selected[groupId] || [];
+  if (g.mode === 'varias') modifierPick.selected[groupId] = chosen.includes(optionId) ? chosen.filter(id => id !== optionId) : [...chosen, optionId];
+  else modifierPick.selected[groupId] = chosen.includes(optionId) && g.mode === 'una-opcional' ? [] : [optionId]; // la obligatoria no se puede dejar vacía
+  renderModifierPick();
+}
+function pickedModifiers() {
+  if (!modifierPick) return [];
+  return productModifierGroups(modifierPick.productId).flatMap(g => (modifierPick.selected[g.id] || []).map(optionId => {
+    const o = g.options.find(x => x.id === optionId); if (!o) return null;
+    return { groupId: g.id, groupName: g.name, optionId: o.id, name: o.name, price: Number(o.price) || 0, ...(o.insumoId && Number(o.qty) > 0 ? { insumoId: o.insumoId, qty: Number(o.qty), unit: o.unit } : {}) };
+  }).filter(Boolean));
+}
+function confirmModifierPick() {
+  if (!modifierPick) return;
+  const faltan = productModifierGroups(modifierPick.productId).filter(g => g.mode === 'una' && !(modifierPick.selected[g.id] || []).length);
+  if (faltan.length) return showToast(`Elige: ${faltan.map(g => g.name).join(', ')}.`);
+  const { productId } = modifierPick, mods = pickedModifiers();
+  modifierPick = null; document.querySelector('#modifierPickDialog').close();
+  addProduct(productId, mods);
+}
+
+/* Administrar grupos (Productos → Adiciones y modificadores) */
+let modifierDraft = null;
+function renderModifierGroups() {
+  const box = document.querySelector('#modifierGroupsList'); if (!box) return;
+  const groups = modifierGroups();
+  box.innerHTML = groups.length ? groups.map(g => `<div class="modifier-group-row"><div><strong>${escapeHtml(g.name)}</strong><small class="muted">${MODIFIER_MODES[g.mode] || ''} · ${g.options.map(o => escapeHtml(o.name) + (Number(o.price) > 0 ? ` (+${money.format(o.price)})` : '')).join(', ') || 'sin opciones'}</small><small class="muted">${(g.productIds || []).length ? `En ${(g.productIds || []).map(id => escapeHtml(state.products.find(p => p.id === id)?.name || '')).filter(Boolean).join(', ')}` : 'Sin productos asignados'}</small></div><button class="mini-action" data-edit-modifier-group="${escapeHtml(g.id)}">Editar</button></div>`).join('') : '<p class="muted">Aún no hay grupos. Crea por ejemplo «Término de la carne» (obligatorio) o «Adiciones» (con precio) y asígnalos a tus productos.</p>';
+}
+function openModifierGroupDialog(id = null) {
+  const g = id && modifierGroups().find(x => x.id === id);
+  modifierDraft = g ? structuredClone(g) : { id: null, name: '', mode: 'una', options: [{ id: uid('opc'), name: '', price: 0 }], productIds: [] };
+  document.querySelector('#modifierGroupDialog h2').textContent = g ? 'Editar grupo' : 'Nuevo grupo de opciones';
+  document.querySelector('#modifierGroupName').value = modifierDraft.name;
+  document.querySelector('#modifierGroupMode').value = modifierDraft.mode;
+  document.querySelector('#deleteModifierGroupButton').hidden = !g;
+  renderModifierDraft();
+  document.querySelector('#modifierGroupDialog').showModal();
+}
+function renderModifierDraft() {
+  if (!modifierDraft) return;
+  const insumos = [...(state.insumos || [])].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  document.querySelector('#modifierOptionLines').innerHTML = modifierDraft.options.map((o, i) => {
+    const ins = o.insumoId && insumoById(o.insumoId), units = ins ? compatibleUnits(ins.unit) : [];
+    return `<div class="modifier-option-line"><input type="text" maxlength="40" value="${escapeHtml(o.name)}" placeholder="Opción (ej. Término medio)" data-mod-index="${i}" data-mod-field="name" aria-label="Nombre de la opción" /><input type="number" min="0" step="100" inputmode="numeric" value="${Number(o.price) || ''}" placeholder="$0" data-mod-index="${i}" data-mod-field="price" aria-label="Precio adicional" /><select data-mod-index="${i}" data-mod-field="insumoId" aria-label="Insumo que descuenta"><option value="">Sin insumo</option>${insumos.map(x => `<option value="${escapeHtml(x.id)}"${x.id === o.insumoId ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}</select>${ins ? `<input type="number" min="0" step="any" inputmode="decimal" value="${Number(o.qty) || ''}" placeholder="0" data-mod-index="${i}" data-mod-field="qty" aria-label="Cantidad del insumo" /><select data-mod-index="${i}" data-mod-field="unit" aria-label="Unidad">${units.map(u => `<option${u === o.unit ? ' selected' : ''}>${u}</option>`).join('')}</select>` : '<span></span><span></span>'}<button type="button" class="remove-line" data-remove-mod-option="${i}" aria-label="Quitar opción">×</button></div>`;
+  }).join('');
+  document.querySelector('#modifierGroupProducts').innerHTML = state.products.length ? state.products.map(p => `<label class="check-row modifier-product"><input type="checkbox" data-mod-product="${escapeHtml(p.id)}"${modifierDraft.productIds.includes(p.id) ? ' checked' : ''} /> ${escapeHtml(p.name)} <small class="muted">${escapeHtml(p.category || '')}</small></label>`).join('') : '<p class="muted">Crea productos para asignarles el grupo.</p>';
+}
+function updateModifierDraft(target) {
+  if (!modifierDraft) return;
+  if (target.dataset.modProduct !== undefined) { const id = target.dataset.modProduct; modifierDraft.productIds = target.checked ? [...new Set([...modifierDraft.productIds, id])] : modifierDraft.productIds.filter(x => x !== id); return; }
+  const o = modifierDraft.options[Number(target.dataset.modIndex)]; if (!o) return;
+  const field = target.dataset.modField;
+  if (field === 'insumoId') { o.insumoId = target.value || undefined; const ins = o.insumoId && insumoById(o.insumoId); o.unit = ins ? defaultRecipeUnit(ins.unit) : undefined; if (!ins) delete o.qty; return renderModifierDraft(); }
+  if (field === 'unit') { o.unit = target.value; return; }
+  o[field] = field === 'name' ? target.value : Number(target.value) || 0;
+}
+function addModifierOption() { if (modifierDraft) { modifierDraft.options.push({ id: uid('opc'), name: '', price: 0 }); renderModifierDraft(); } }
+function removeModifierOption(index) { if (modifierDraft) { modifierDraft.options.splice(Number(index), 1); renderModifierDraft(); } }
+function saveModifierGroup() {
+  if (!modifierDraft) return;
+  const name = document.querySelector('#modifierGroupName').value.trim(), mode = document.querySelector('#modifierGroupMode').value;
+  const options = modifierDraft.options.map(o => ({ ...o, name: String(o.name || '').trim(), price: Math.max(0, Math.round(Number(o.price) || 0)) })).filter(o => o.name);
+  if (!name) return showToast('Escribe el nombre del grupo (ej. Término de la carne).');
+  if (!MODIFIER_MODES[mode]) return showToast('Elige cómo se escogen las opciones.');
+  if (!options.length) return showToast('Agrega al menos una opción con nombre.');
+  if (options.some(o => o.insumoId && !(Number(o.qty) > 0))) return showToast('Indica la cantidad del insumo de cada opción que lo descuenta.');
+  const group = { id: modifierDraft.id || uid('mod'), name, mode, options: options.map(o => (o.insumoId ? o : { id: o.id, name: o.name, price: o.price })), productIds: modifierDraft.productIds.filter(id => state.products.some(p => p.id === id)) };
+  const groups = modifierGroups().filter(g => g.id !== group.id);
+  const index = modifierGroups().findIndex(g => g.id === group.id);
+  groups.splice(index < 0 ? groups.length : index, 0, group);
+  state.profile = { ...state.profile, modifierGroups: groups, sync_status: 'pending' };
+  saveState(); if (globalThis.NexoSync?.scheduleSync) globalThis.NexoSync.scheduleSync();
+  modifierDraft = null; document.querySelector('#modifierGroupDialog').close(); renderAll();
+  showToast(index < 0 ? 'Grupo de opciones creado.' : 'Grupo actualizado.');
+}
+function deleteModifierGroup() {
+  if (!modifierDraft?.id) return;
+  if (!window.confirm(`¿Eliminar el grupo «${modifierDraft.name}»? Los pedidos y facturas que ya lo usaron no cambian.`)) return;
+  state.profile = { ...state.profile, modifierGroups: modifierGroups().filter(g => g.id !== modifierDraft.id), sync_status: 'pending' };
+  saveState(); if (globalThis.NexoSync?.scheduleSync) globalThis.NexoSync.scheduleSync();
+  modifierDraft = null; document.querySelector('#modifierGroupDialog').close(); renderAll(); showToast('Grupo eliminado.');
+}
+globalThis.productModifierGroups = productModifierGroups;
+globalThis.consumeModifiers = consumeModifiers;
+globalThis.renderModifierGroups = renderModifierGroups;
 
 /* ============ Mermas, conteo físico y ajustes ============
    Trabajan sobre productos de reventa (state.inventory) e insumos (state.insumos) por igual. */
@@ -1704,7 +1830,7 @@ function handleLoginKeys(event) {
 function initModules() {
   ['openPayment', 'confirmPayment'].forEach(n => guard(n, 'charge'));
   ['openShiftDialog', 'openCloseDialog', 'confirmOpenShift', 'confirmClose'].forEach(n => guard(n, 'shift'));
-  ['openProductDialog', 'saveProduct', 'deleteProduct', 'openImportProductsDialog'].forEach(n => guard(n, 'products'));
+  ['openProductDialog', 'saveProduct', 'deleteProduct', 'openImportProductsDialog', 'openModifierGroupDialog', 'saveModifierGroup', 'deleteModifierGroup'].forEach(n => guard(n, 'products'));
   ['addFloorItem', 'deleteFloorItem', 'saveFloorLayout'].forEach(n => guard(n, 'tables'));
   ['openCategoriesDialog', 'addCategory', 'saveCategory', 'deleteCategory'].forEach(n => guard(n, 'categories'));
   ['saveProfile'].forEach(n => guard(n, 'profile')); ['exportBackup', 'importBackup'].forEach(n => guard(n, 'backup'));

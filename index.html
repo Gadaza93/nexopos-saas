@@ -103,6 +103,7 @@
         <section id="products" class="view">
           <div class="section-heading"><div><h2>Productos</h2><p>Define lo que vendes, su costo, precio de venta y existencia inicial.</p></div><div class="inline-actions"><button id="downloadTemplateBtn" class="outline-button" type="button" title="Descargar plantilla Excel / CSV"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:15px;height:15px;vertical-align:-2px;margin-right:4px;"><path d="M12 3v12M7.5 10.5L12 15l4.5-4.5M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Descargar Plantilla</button><button id="importProductsBtn" class="outline-button" type="button" title="Importar productos masivamente desde Excel o CSV"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:15px;height:15px;vertical-align:-2px;margin-right:4px;"><path d="M12 16V4M7.5 8.5L12 4l4.5 4.5M4 20h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Importar Productos</button><button id="manageCategoriesButton" class="outline-button">Categorías</button><button id="newProductButton" class="primary-button">+ Nuevo producto</button></div></div>
           <div class="data-card"><table><thead><tr><th>Producto</th><th>Categoría</th><th>Costo promedio</th><th>Venta</th><th>Ganancia</th><th>Rentabilidad</th><th>Existencias</th><th></th></tr></thead><tbody id="productsTable"></tbody></table></div>
+          <div class="data-card modifiers-card"><div class="card-title-row"><div><h3>Adiciones y modificadores</h3><p class="muted">Grupos de opciones que se eligen al agregar un producto: término de la carne, adiciones con precio, tipo de leche… Una opción puede descontar su insumo.</p></div><button id="newModifierGroupButton" class="primary-button" type="button" data-perm="products">+ Nuevo grupo</button></div><div id="modifierGroupsList" class="modifier-groups-list"></div></div>
         </section>
 
         <section id="purchases" class="view">
@@ -445,6 +446,24 @@
       </div>
       <label class="field-label" for="productImage">Imagen del producto</label><div class="product-image-input"><div id="productImagePreview" class="product-image-preview">🍾</div><label class="outline-button file-button">Seleccionar imagen<input id="productImage" type="file" accept="image/*" hidden /></label></div>
       <button id="saveProductButton" class="primary-button full">Crear producto e inventario</button>
+    </dialog>
+
+    <dialog id="modifierPickDialog" class="small-dialog modifier-pick-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">ELIGE LAS OPCIONES</p><h2 id="modifierPickTitle">Producto</h2></div><button class="icon-button" data-close="modifierPickDialog" aria-label="Cerrar">×</button></div>
+      <div id="modifierPickGroups" class="modifier-pick-groups"></div>
+      <div class="modifier-pick-footer"><span>Precio</span><strong id="modifierPickTotal">$0</strong></div>
+      <button id="confirmModifierPickButton" class="primary-button full" type="button">Agregar al pedido</button>
+    </dialog>
+
+    <dialog id="modifierGroupDialog" class="small-dialog modifier-group-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">CATÁLOGO</p><h2>Nuevo grupo de opciones</h2></div><button class="icon-button" data-close="modifierGroupDialog" aria-label="Cerrar">×</button></div>
+      <label class="field-label" for="modifierGroupName">Nombre del grupo</label><input id="modifierGroupName" type="text" maxlength="40" placeholder="Ej. Término de la carne, Adiciones" />
+      <label class="field-label" for="modifierGroupMode">Cómo se elige</label><select id="modifierGroupMode"><option value="una">Elegir una (obligatorio)</option><option value="una-opcional">Elegir una (opcional)</option><option value="varias">Elegir varias (opcional)</option></select>
+      <div class="recipe-head"><span class="field-label">Opciones · precio adicional · insumo que descuenta</span><button type="button" id="addModifierOptionButton" class="outline-button">+ Opción</button></div>
+      <div id="modifierOptionLines" class="modifier-option-lines"></div>
+      <span class="field-label">Productos que usan este grupo</span>
+      <div id="modifierGroupProducts" class="modifier-group-products"></div>
+      <div class="dialog-actions-row"><button id="deleteModifierGroupButton" class="danger-outline-button" type="button" hidden>Eliminar</button><button id="saveModifierGroupButton" class="primary-button full" type="button">Guardar grupo</button></div>
     </dialog>
 
     <dialog id="insumoDialog" class="small-dialog">

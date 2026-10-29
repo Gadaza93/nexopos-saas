@@ -99,7 +99,13 @@ function getInitialDemoState() {
       phone: '300 000 0000',
       ownerPhone: '+57',
       syncId: 'nexopos_demo',
-      image: null
+      image: null,
+      // Grupos de ejemplo: término (obligatorio), adiciones con precio e insumo, y tipo de leche (opcional)
+      modifierGroups: [
+        { id: 'mod_termino', name: 'Término de la carne', mode: 'una', productIds: ['demo_7'], options: [{ id: 'opc_medio', name: 'Término medio', price: 0 }, { id: 'opc_34', name: 'Tres cuartos', price: 0 }, { id: 'opc_asada', name: 'Bien asada', price: 0 }] },
+        { id: 'mod_adiciones', name: 'Adiciones', mode: 'varias', productIds: ['demo_5', 'demo_7', 'demo_8'], options: [{ id: 'opc_queso', name: 'Queso extra', price: 2000, insumoId: 'ins_queso', qty: 30, unit: 'g' }, { id: 'opc_huevo', name: 'Huevo frito', price: 1500, insumoId: 'ins_huevo', qty: 1, unit: 'und' }, { id: 'opc_tocineta', name: 'Tocineta', price: 3000 }] },
+        { id: 'mod_leche', name: 'Tipo de leche', mode: 'una-opcional', productIds: ['demo_2'], options: [{ id: 'opc_deslactosada', name: 'Deslactosada', price: 0 }, { id: 'opc_almendras', name: 'Leche de almendras', price: 1500 }] }
+      ]
     },
     cashShift: { id: 'shift_demo_init', status: 'closed', openingCash: 0 },
     tables: structuredClone(DEMO_TABLES),
@@ -373,6 +379,8 @@ function localISO(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padSt
 function today() { return localISO(new Date()); }
 function displayDate() { return new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).replace(/^./, c => c.toUpperCase()); }
 function getOrder(id) { return (state.orders || []).find(o => o.id === id); }
+// Llave de una línea del pedido: con adiciones/modificadores, su lineId (producto + opciones); sin ellos, el producto
+function lineKey(item) { return String(item?.lineId || item?.productId || ''); }
 
 /* ---------- Pedidos retirados (tumbas) ----------
    Pedidos cobrados, eliminados o unidos en esta caja. mergeRemoteOrders (sync.js) los consulta para que una copia
@@ -874,7 +882,7 @@ function mergeOrderInto(source, target) {
   // Mismo producto y mismo precio: se suman cantidades. Si el precio cambió entre una y otra cuenta, línea aparte (no altera importes)
   source.items.forEach(item => {
     if (!((Number(item.qty) || 0) > 0)) return;
-    const same = target.items.find(i => i.productId === item.productId && Number(i.price) === Number(item.price));
+    const same = target.items.find(i => lineKey(i) === lineKey(item) && Number(i.price) === Number(item.price));
     if (same) { same.qty = Number(same.qty) + Number(item.qty); same.sentQty = itemSentQty(same) + itemSentQty(item); if (item.kitchenNote) same.kitchenNote = [same.kitchenNote, item.kitchenNote].filter(Boolean).join(' · '); }
     else target.items.push(structuredClone(item));
   });
@@ -1098,11 +1106,11 @@ function renderOrderDialog() {
             </div>
             <span class="item-price">${money.format((item.price || 0) * (item.qty || 1))}</span>
             <div class="quantity-control">
-              <button type="button" data-item-change="${escapeHtml(item.productId)}" data-delta="-1" aria-label="Disminuir">−</button>
+              <button type="button" data-item-change="${escapeHtml(lineKey(item))}" data-delta="-1" aria-label="Disminuir">−</button>
               <span>${item.qty}</span>
-              <button type="button" data-item-change="${escapeHtml(item.productId)}" data-delta="1" aria-label="Aumentar">+</button>
+              <button type="button" data-item-change="${escapeHtml(lineKey(item))}" data-delta="1" aria-label="Aumentar">+</button>
             </div>
-            ${kitchen && unsent ? `<input class="kitchen-note-input" type="text" maxlength="80" data-kitchen-note="${escapeHtml(item.productId)}" value="${escapeHtml(item.kitchenNote || '')}" placeholder="Nota para cocina (ej. sin cebolla)" aria-label="Nota para cocina de ${escapeHtml(item.name)}" />` : ''}
+            ${kitchen && unsent ? `<input class="kitchen-note-input" type="text" maxlength="80" data-kitchen-note="${escapeHtml(lineKey(item))}" value="${escapeHtml(item.kitchenNote || '')}" placeholder="Nota para cocina (ej. sin cebolla)" aria-label="Nota para cocina de ${escapeHtml(item.name)}" />` : ''}
           </div>
         `; }).join('')
       : '<p class="empty-ticket">Agrega productos para iniciar el pedido.</p>';
@@ -1137,20 +1145,26 @@ globalThis.renderOrderDialog = renderOrderDialog;
 globalThis.renderPOSProducts = renderOrderDialog;
 globalThis.loadProductsToOrder = renderOrderDialog;
 
-function addProduct(productId) {
+// modifiers: opciones elegidas (openModifierDialog). Sin ellas, un producto con grupos de opciones abre primero la selección.
+function addProduct(productId, modifiers = null) {
   const order = getOrder(state.currentOrderId);
   const prods = getPOSProducts();
   const product = prods.find(p => p.id === productId);
   if (!order || !product) return;
-  const found = order.items.find(i => i.productId === productId);
+  if (!modifiers && typeof productModifierGroups === 'function' && productModifierGroups(productId).length) return openModifierDialog(productId);
+  const mods = modifiers || [];
+  const key = mods.length ? modifiersLineId(productId, mods) : String(productId);
+  const found = order.items.find(i => lineKey(i) === key);
   const prepared = product.tipo === 'preparado' && typeof recipeCost === 'function';
   // Avisa pero no frena la venta: el insumo queda en negativo hasta la próxima compra o conteo
   if (prepared && preparedAvailable(product) === 0) showToast(`⚠ Faltan insumos para ${product.name}. Se vende igual; revisa el inventario.`);
+  // Con adiciones: línea propia, precio y costo con las adiciones, y nombre con las opciones (así sale en cuenta, comanda y recibo)
+  const conOpciones = item => (mods.length ? { ...item, lineId: key, productName: product.name, name: `${product.name} (${modifiersLabel(mods)})`, price: item.price + mods.reduce((s, m) => s + m.price, 0), cost: item.cost + modifiersCost(mods), modifiers: mods } : item);
   if (found) found.qty++;
   else if (prepared) {
-    order.items.push({ productId: product.id, name: product.name, price: product.price, cost: recipeCost(product), category: product.category, qty: 1, tipo: 'preparado', receta: structuredClone(product.receta || []) });
+    order.items.push(conOpciones({ productId: product.id, name: product.name, price: product.price, cost: recipeCost(product), category: product.category, qty: 1, tipo: 'preparado', receta: structuredClone(product.receta || []) }));
   } else {
-    order.items.push({
+    order.items.push(conOpciones({
       productId: product.id,
       name: product.name,
       price: product.price,
@@ -1159,7 +1173,7 @@ function addProduct(productId) {
       qty: 1,
       inventoryId: product.inventoryId || `stock-${product.id}`,
       recipe: product.recipe || { [product.inventoryId || `stock-${product.id}`]: 1 }
-    });
+    }));
   }
   order.sync_status = 'pending';
   order.updatedAt = Date.now();
@@ -1168,7 +1182,7 @@ function addProduct(productId) {
   renderOrderDialog();
 }
 globalThis.addProduct = addProduct;
-function changeItem(productId, delta) { const order=getOrder(state.currentOrderId); const item=order?.items.find(i=>i.productId===productId); if(!item)return; if(Number(delta)<0 && !registerKitchenReduction(order,item,item.qty+Number(delta)))return; item.qty+=Number(delta); if(item.qty<=0)order.items=order.items.filter(i=>i!==item); order.sync_status='pending'; order.updatedAt=Date.now(); saveState(); if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{}); renderOrderDialog(); }
+function changeItem(key, delta) { const order=getOrder(state.currentOrderId); const item=order?.items.find(i=>lineKey(i)===String(key)); if(!item)return; if(Number(delta)<0 && !registerKitchenReduction(order,item,item.qty+Number(delta)))return; item.qty+=Number(delta); if(item.qty<=0)order.items=order.items.filter(i=>i!==item); order.sync_status='pending'; order.updatedAt=Date.now(); saveState(); if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{}); renderOrderDialog(); }
 function saveOrder() { const order=getOrder(state.currentOrderId); if(!order)return; order.note=document.querySelector('#orderNote').value.trim(); order.sync_status='pending'; order.updatedAt=Date.now(); if(order.pendingVoids?.length)sendOrderToKitchen(order,{voidsOnly:true,quiet:true}); if(!order.items.length){state.orders=state.orders.filter(o=>o.id!==order.id);saveState();if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{});document.querySelector('#orderDialog').close();state.currentOrderId=null;renderAll();return showToast('Pedido vacío descartado.');} saveState();if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{});document.querySelector('#orderDialog').close();state.currentOrderId=null;renderAll();showToast('Pedido guardado. Queda abierto hasta cobrarlo.'); }
 const PAYMENT_METHODS = ['Efectivo', 'Nequi', 'Daviplata', 'Tarjeta / Datáfono', 'Transferencia'];
 let activePaymentMethod = 'Efectivo';
@@ -1405,6 +1419,7 @@ function deductInventory(order) {
 
     const prodId = item.productId || item.id;
     const product = state.products.find(p => p.id === prodId || (item.inventoryId && p.inventoryId === item.inventoryId));
+    if (typeof consumeModifiers === 'function') consumeModifiers(item, qtySold); // insumos de las adiciones
     // Plato preparado: descuenta los insumos de la receta que llevaba el pedido (la del producto si es un pedido viejo)
     if ((item.tipo === 'preparado' || product?.tipo === 'preparado') && typeof consumeRecipe === 'function') return consumeRecipe(item.receta?.length ? item : product, qtySold);
     const invId = item.inventoryId || product?.inventoryId || (prodId ? `stock-${prodId}` : null);
@@ -1482,7 +1497,7 @@ function confirmPayment() {
     order.paidAmount = Number(order.paidAmount || 0) + currentCheckout.total;
   } else if (currentCheckout.type === 'selection') {
     currentCheckout.items.forEach(selItem => {
-      const oi = order.items.find(i => i.productId === selItem.productId);
+      const oi = order.items.find(i => lineKey(i) === lineKey(selItem));
       if (oi) { oi.qty -= selItem.qty; oi.sentQty = Math.min(Number(oi.sentQty) || 0, Math.max(0, oi.qty)); } // cobrado, no anulado: lo que queda sigue enviado
     });
     order.items = order.items.filter(i => i.qty > 0);
@@ -1702,8 +1717,8 @@ function renderSplitItems(order) {
   let totalUnits = 0;
 
   tbody.innerHTML = order.items.map(item => {
-    const sel = Math.min(item.qty, Math.max(0, splitBillData.itemQuantities[item.productId] || 0));
-    splitBillData.itemQuantities[item.productId] = sel;
+    const sel = Math.min(item.qty, Math.max(0, splitBillData.itemQuantities[lineKey(item)] || 0));
+    splitBillData.itemQuantities[lineKey(item)] = sel;
     const subtotal = sel * item.price;
     totalSelected += subtotal;
     totalUnits += sel;
@@ -1714,9 +1729,9 @@ function renderSplitItems(order) {
         <td>${item.qty}</td>
         <td>
           <div class="quantity-control">
-            <button type="button" data-split-item-dec="${item.productId}">−</button>
+            <button type="button" data-split-item-dec="${escapeHtml(lineKey(item))}">−</button>
             <span>${sel}</span>
-            <button type="button" data-split-item-inc="${item.productId}" ${sel >= item.qty ? 'disabled' : ''}>+</button>
+            <button type="button" data-split-item-inc="${escapeHtml(lineKey(item))}" ${sel >= item.qty ? 'disabled' : ''}>+</button>
           </div>
         </td>
         <td class="text-right"><b>${money.format(subtotal)}</b></td>
@@ -1734,28 +1749,28 @@ function renderSplitItems(order) {
   if (chargeBtn) chargeBtn.disabled = totalUnits === 0;
 }
 
-function changeSplitItemQty(productId, delta) {
+function changeSplitItemQty(key, delta) {
   const order = getOrder(state.currentOrderId || splitBillData.orderId);
-  const item = order?.items.find(i => i.productId === productId);
+  const item = order?.items.find(i => lineKey(i) === String(key));
   if (!item) return;
 
-  const cur = splitBillData.itemQuantities[productId] || 0;
+  const cur = splitBillData.itemQuantities[lineKey(item)] || 0;
   const next = Math.max(0, Math.min(item.qty, cur + delta));
-  splitBillData.itemQuantities[productId] = next;
+  splitBillData.itemQuantities[lineKey(item)] = next;
   renderSplitItems(order);
 }
 
 function selectAllSplitItems() {
   const order = getOrder(state.currentOrderId || splitBillData.orderId);
   if (!order) return;
-  order.items.forEach(i => { splitBillData.itemQuantities[i.productId] = i.qty; });
+  order.items.forEach(i => { splitBillData.itemQuantities[lineKey(i)] = i.qty; });
   renderSplitItems(order);
 }
 
 function clearSplitItems() {
   const order = getOrder(state.currentOrderId || splitBillData.orderId);
   if (!order) return;
-  order.items.forEach(i => { splitBillData.itemQuantities[i.productId] = 0; });
+  order.items.forEach(i => { splitBillData.itemQuantities[lineKey(i)] = 0; });
   renderSplitItems(order);
 }
 
@@ -1765,10 +1780,10 @@ function chargeSelectedSplitItems() {
   if (splitInProgress(order)) return showToast('Esta cuenta ya se está cobrando en partes iguales. Termina de cobrar las partes que faltan.');
 
   const itemsToCharge = order.items
-    .filter(i => (splitBillData.itemQuantities[i.productId] || 0) > 0)
+    .filter(i => (splitBillData.itemQuantities[lineKey(i)] || 0) > 0)
     .map(i => ({
       ...structuredClone(i),
-      qty: splitBillData.itemQuantities[i.productId]
+      qty: splitBillData.itemQuantities[lineKey(i)]
     }));
 
   if (!itemsToCharge.length) return showToast('Selecciona al menos una unidad a cobrar.');
@@ -2335,6 +2350,14 @@ document.addEventListener('click', event => {
   if (target.id === 'createCustomOrderButton') createCustomOrder();
   if (target.id === 'saveOrderButton') saveOrder();
   if (target.id === 'sendKitchenButton') { sendOrderToKitchen(); renderOrderDialog(); }
+  if (target.dataset.modifierOption) toggleModifierOption(target.dataset.modifierGroup, target.dataset.modifierOption);
+  if (target.id === 'confirmModifierPickButton') confirmModifierPick();
+  if (target.id === 'newModifierGroupButton') openModifierGroupDialog();
+  if (target.dataset.editModifierGroup) openModifierGroupDialog(target.dataset.editModifierGroup);
+  if (target.id === 'addModifierOptionButton') addModifierOption();
+  if (target.dataset.removeModOption !== undefined) removeModifierOption(target.dataset.removeModOption);
+  if (target.id === 'saveModifierGroupButton') saveModifierGroup();
+  if (target.id === 'deleteModifierGroupButton') deleteModifierGroup();
   if (target.id === 'newInsumoButton') openInsumoDialog();
   if (target.id === 'saveInsumoButton') saveInsumo();
   if (target.id === 'deleteInsumoButton') deleteInsumo();
@@ -2384,6 +2407,9 @@ if (searchEl) {
 // Receta en el formulario de producto y unidad del formulario de insumo
 document.addEventListener('input', e => { if (e.target.dataset?.recipeField === 'qty') updateRecipeDraft(e.target); else if (e.target.id === 'productPrice' && typeof updateRecipeSummary === 'function') updateRecipeSummary(); });
 document.addEventListener('change', e => { if (e.target.dataset?.recipeField && e.target.dataset.recipeField !== 'qty') updateRecipeDraft(e.target); else if (e.target.id === 'productType') toggleProductType(); else if (e.target.id === 'insumoUnit') updateInsumoUnitLabels(); });
+// Editor de grupos de opciones: texto y precio al escribir; insumo, unidad y productos al cambiar
+document.addEventListener('input', e => { if (e.target.dataset?.modField === 'name' || e.target.dataset?.modField === 'price' || e.target.dataset?.modField === 'qty') updateModifierDraft(e.target); });
+document.addEventListener('change', e => { if (e.target.dataset?.modField === 'insumoId' || e.target.dataset?.modField === 'unit' || e.target.dataset?.modProduct !== undefined) updateModifierDraft(e.target); });
 // Propina voluntaria en el cobro (quitar, volver a poner o cambiar el valor) y su porcentaje sugerido en «Mi negocio»
 document.addEventListener('change', e => {
   if (e.target.id === 'tipEnabled' && currentCheckout) setCheckoutTip(e.target.checked ? (currentCheckout.tipSuggested || Math.round(currentCheckout.total * tipPercent() / 100)) : 0);
@@ -2391,7 +2417,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => { if (e.target.id === 'tipAmount') setCheckoutTip(e.target.value); });
 // Nota para cocina de una línea: se guarda sin volver a pintar (no pierde el foco); sale en la próxima comanda
-document.addEventListener('input', e => { const productId = e.target.dataset?.kitchenNote; if (productId === undefined) return; const item = getOrder(state.currentOrderId)?.items.find(i => i.productId === productId); if (item) { item.kitchenNote = e.target.value.slice(0, 80); saveState(); } });
+document.addEventListener('input', e => { const key = e.target.dataset?.kitchenNote; if (key === undefined) return; const item = getOrder(state.currentOrderId)?.items.find(i => lineKey(i) === key); if (item) { item.kitchenNote = e.target.value.slice(0, 80); saveState(); } });
 document.addEventListener('change', e => { const category = e.target.dataset?.kitchenCategory; if (category !== undefined) { setKitchenStation(category, e.target.value); showToast(`${category}: ${KITCHEN_STATION_OPTIONS[e.target.value]}.`); } else if (e.target.dataset?.stationPrinter) { printSettings().stationPrinters = { ...(printSettings().stationPrinters || {}), [e.target.dataset.stationPrinter]: e.target.value }; saveState(); } });
 document.querySelector('#orderNote').addEventListener('input', e => { const order = getOrder(state.currentOrderId); if (order) { order.note = e.target.value; saveState(); } });
 document.querySelector('#amountReceived').addEventListener('input', updateTenderChange);

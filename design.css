@@ -1461,6 +1461,39 @@ html[data-theme="light"] .login-dialog::backdrop { background: radial-gradient(5
 .print-printer-row .outline-button { min-height: 40px; padding: 0 12px; }
 .print-settings-card .check-row { margin-bottom: 12px; }
 
+/* ---------- Adiciones y modificadores ---------- */
+.modifiers-card { margin-top: 16px; }
+.modifier-groups-list { display: grid; gap: 8px; }
+.modifier-group-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); }
+.modifier-group-row div { display: grid; gap: 2px; min-width: 0; }
+.modifier-group-row small { overflow-wrap: anywhere; }
+.modifier-pick-groups { display: grid; gap: 14px; margin: 4px 0 14px; max-height: 55vh; overflow: auto; }
+.modifier-group { margin: 0; padding: 0; border: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.modifier-group legend { width: 100%; margin-bottom: 6px; padding: 0; font-size: 14px; font-weight: 800; color: var(--text); }
+.modifier-group legend small { margin-left: 6px; font-size: 11px; font-weight: 700; }
+.modifier-group legend small.required { color: var(--accent); }
+.modifier-option { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface-2); color: var(--text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.modifier-option b { color: var(--accent); font-size: 12px; }
+.modifier-option.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.modifier-pick-footer { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-top: 10px; border-top: 1px dashed var(--line-strong); font-weight: 700; }
+.modifier-pick-footer strong { font-size: 20px; color: var(--accent); }
+.modifier-option-lines { display: grid; gap: 6px; margin-bottom: 12px; max-height: 240px; overflow: auto; }
+.modifier-option-line { display: grid; grid-template-columns: minmax(0, 1.4fr) 80px minmax(0, 1fr) 64px 58px 26px; gap: 6px; align-items: center; }
+.modifier-option-line input, .modifier-option-line select { margin: 0; min-width: 0; }
+.modifier-group-products { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 2px 12px; max-height: 180px; overflow: auto; margin: 6px 0 14px; }
+.modifier-product { margin: 4px 0; font-size: 13px; }
+.modifier-product input { width: auto; margin: 0; }
+@media (max-width: 680px) {
+  /* Dos renglones por opción: nombre, precio y quitar · insumo, cantidad y unidad */
+  .modifier-option-line { grid-template-columns: minmax(0, 1fr) 64px 58px 26px; grid-template-areas: "nombre precio precio quitar" "insumo cantidad unidad unidad"; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+  .modifier-option-line > :nth-child(1) { grid-area: nombre; }
+  .modifier-option-line > :nth-child(2) { grid-area: precio; }
+  .modifier-option-line > :nth-child(3) { grid-area: insumo; }
+  .modifier-option-line > :nth-child(4) { grid-area: cantidad; }
+  .modifier-option-line > :nth-child(5) { grid-area: unidad; }
+  .modifier-option-line > :nth-child(6) { grid-area: quitar; }
+}
+
 /* ---------- Propina voluntaria (ventana de cobro) ---------- */
 .tip-row { display: grid; grid-template-columns: 1fr 130px; align-items: center; gap: 6px 12px; margin: 12px 0 4px; padding: 10px 12px; border: 1px solid var(--accent-line); border-radius: var(--r-sm); background: var(--accent-soft); }
 .tip-row[hidden] { display: none; }
