@@ -80,13 +80,13 @@ const admin = require('../admin.js');
   console.log('   ✅ Nombres de negocio escapados antes de pintarlos.');
 
   // --- 4. Alta de negocio (admin_create_negocio) ---
-  assert.strictEqual(admin.slugifyNegocioId('Gastrobar La Estación'), 'bar_la_estacion');
-  assert.strictEqual(admin.slugifyNegocioId('Bar Central'), 'bar_central');
-  assert.strictEqual(admin.slugifyNegocioId('El Rincón de Ñoño #2'), 'bar_el_rincon_de_nono_2');
-  assert.strictEqual(admin.slugifyNegocioId('Bar'), 'bar_bar');
+  assert.strictEqual(admin.slugifyNegocioId('Restaurante La Casona'), 'restaurante_la_casona');
+  assert.strictEqual(admin.slugifyNegocioId('Cafetería Central'), 'cafeteria_central');
+  assert.strictEqual(admin.slugifyNegocioId('El Rincón de Ñoño #2'), 'el_rincon_de_nono_2');
+  assert.strictEqual(admin.slugifyNegocioId('Pó'), 'negocio_po', 'muy corto: se completa para tener 3 o más caracteres');
   assert.strictEqual(admin.slugifyNegocioId('   '), '');
   assert.ok(admin.slugifyNegocioId('x'.repeat(80)).length <= 40);
-  console.log('   ✅ ID sugerido: «Gastrobar La Estación» → bar_la_estacion (sin tildes ni símbolos).');
+  console.log('   ✅ ID sugerido: «Restaurante La Casona» → restaurante_la_casona (sin tildes ni símbolos, sin prefijo).');
 
   for (let i = 0; i < 200; i++) {
     const pwd = admin.generatePassword();

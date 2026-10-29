@@ -128,7 +128,7 @@ function getBusinessId() {
     }
     if (typeof state !== "undefined" && state?.profile?.nit) {
       const cleanNit = String(state.profile.nit).replace(/\D/g, "");
-      if (cleanNit) return `bar_${cleanNit}`;
+      if (cleanNit) return `negocio_${cleanNit}`;
     }
   } catch (e) {
     /* ignore */

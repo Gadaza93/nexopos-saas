@@ -60,14 +60,13 @@ const PLAN_LABELS = { pro: 'PRO', basico: 'BÁSICO' };
 const planLabel = plan => PLAN_LABELS[String(plan || '').toLowerCase()] || String(plan || '—').toUpperCase();
 const otherPlan = plan => String(plan || '').toLowerCase() === 'basico' ? 'pro' : 'basico'; // botón de cambio de plan de cada fila
 const NEGOCIO_ID_RE = /^[a-z0-9_]{3,40}$/;
-// Palabras genéricas del tipo de local que no aportan al ID: «Gastrobar La Estación» → bar_la_estacion
-const GENERIC_VENUE_WORDS = /^(?:(?:gastro)?bar|restobar|restaurante|cafeteria|cafe|panaderia|pub|taberna|cantina|discoteca|licorera|estadero)_+/;
+// ID sugerido a partir del nombre completo: «Restaurante La Casona» → restaurante_la_casona (sin tildes ni símbolos).
+// Un nombre de menos de 3 caracteres se completa con negocio_ para cumplir NEGOCIO_ID_RE.
 function slugifyNegocioId(nombre) {
   const base = String(nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   if (!base) return '';
-  const core = base.replace(GENERIC_VENUE_WORDS, '') || base;
-  return `bar_${core}`.slice(0, 40).replace(/_+$/, '');
+  return (base.length < 3 ? `negocio_${base}` : base).slice(0, 40).replace(/_+$/, '');
 }
 // Sin caracteres ambiguos (0/O, 1/l/I) para dictarla o copiarla sin errores; siempre con mayúscula, minúscula y número
 const PASSWORD_SETS = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnpqrstuvwxyz', '23456789'];

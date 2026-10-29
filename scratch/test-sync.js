@@ -112,7 +112,7 @@ console.log('✓ NexoSync initialization and credentials verified');
 // 3. Test Business ID resolution
 assert.strictEqual(NexoSync.getBusinessId(), 'nexopos_sede1');
 global.state.profile.syncId = '';
-assert.strictEqual(NexoSync.getBusinessId(), 'bar_9011234567');
+assert.strictEqual(NexoSync.getBusinessId(), 'negocio_9011234567');
 global.state.profile.nit = '';
 assert.strictEqual(NexoSync.getBusinessId(), 'nexopos_default');
 console.log('✓ Business ID resolution logic verified');
