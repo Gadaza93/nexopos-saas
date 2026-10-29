@@ -738,8 +738,88 @@ function deleteCurrentOrder() {
   const order = getOrder(state.currentOrderId); if (!order) return;
   if (order.items.length && !window.confirm(`¿Eliminar el pedido de ${order.tableName} por ${money.format(orderTotal(order))}?`)) return;
   logAudit('Pedido eliminado', `${order.tableName} · ${money.format(orderTotal(order))} · ${order.items.length} productos`, { data: structuredClone(order) });
+  voidAllSent(order); // la cocina deja de preparar lo que ya se había enviado
   state.orders = state.orders.filter(o => o.id !== order.id); if (typeof rememberRemovedOrder === 'function') rememberRemovedOrder(order.id); saveState(); if (globalThis.NexoSync?.deleteActiveOrder) globalThis.NexoSync.deleteActiveOrder(order.id).catch(() => {}); if (globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(() => {}); document.querySelector('#orderDialog').close(); state.currentOrderId = null; renderAll(); showToast('Pedido eliminado.');
 }
+
+/* ============ Comandas de cocina ============
+   Cada línea del pedido guarda sentQty (lo que ya salió a su estación) y kitchenNote (nota del próximo envío).
+   «Enviar a cocina» imprime solo lo nuevo, una comanda por estación (Cocina / Barra; las categorías en 'ninguna' no salen).
+   Quitar algo ya enviado necesita el permiso cancelOrder y deja una anulación en order.pendingVoids, que se imprime en el
+   siguiente envío, al guardar el pedido o al eliminarlo. Un cobro por productos no es anulación: solo baja sentQty. */
+const KITCHEN_STATIONS = { cocina: 'Cocina', barra: 'Barra' };
+const KITCHEN_STATION_OPTIONS = { ...KITCHEN_STATIONS, ninguna: 'No se envía' };
+function kitchenNorm(text) { return String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+// Sin configurar: bebidas y cafetería a Barra, el resto a Cocina
+function defaultKitchenStation(category) { return /bebida|cafe|jugo|gaseosa|refresco|limonada|batido|malteada|licor|cerveza|coctel|vino|aromatica|\bte\b/.test(kitchenNorm(category)) ? 'barra' : 'cocina'; }
+function kitchenStationFor(category) { const saved = state.kitchenStations?.[category]; return KITCHEN_STATION_OPTIONS[saved] ? saved : defaultKitchenStation(category); }
+function setKitchenStation(category, station) { if (!KITCHEN_STATION_OPTIONS[station]) return; state.kitchenStations = { ...(state.kitchenStations || {}), [category]: station }; saveState(); }
+function itemSentQty(item) { return Math.min(Math.max(0, Number(item.sentQty) || 0), Math.max(0, Number(item.qty) || 0)); }
+function itemUnsentQty(item) { return Math.max(0, (Number(item.qty) || 0) - itemSentQty(item)); }
+function itemGoesToKitchen(item) { return kitchenStationFor(itemCategory(item)) !== 'ninguna'; }
+function kitchenPendingCount(order) {
+  if (!order) return 0;
+  return (order.items || []).filter(itemGoesToKitchen).reduce((sum, item) => sum + itemUnsentQty(item), 0)
+    + (order.pendingVoids || []).filter(itemGoesToKitchen).reduce((sum, v) => sum + (Number(v.qty) || 0), 0);
+}
+// Arma las comandas pendientes de un pedido (sin modificarlo): una por estación y tipo
+function pendingComandas(order, { voidsOnly = false } = {}) {
+  const groups = new Map();
+  const add = (type, item, qty, note = '') => {
+    const station = kitchenStationFor(itemCategory(item));
+    if (station === 'ninguna' || !(qty > 0)) return;
+    const key = `${type}:${station}`;
+    if (!groups.has(key)) groups.set(key, { type, station, stationLabel: KITCHEN_STATIONS[station], items: [] });
+    groups.get(key).items.push({ productId: item.productId, name: item.name, qty, note: String(note || '').trim() });
+  };
+  (order?.pendingVoids || []).forEach(v => add('anulacion', v, Number(v.qty) || 0));
+  if (!voidsOnly) (order?.items || []).forEach(item => add('envio', item, itemUnsentQty(item), item.kitchenNote));
+  // Anulaciones primero: la cocina debe parar antes de empezar lo nuevo
+  return [...groups.values()].sort((a, b) => (a.type === b.type ? 0 : a.type === 'anulacion' ? -1 : 1));
+}
+function kitchenPrinterFor(station) { return (typeof printSettings === 'function' ? printSettings().stationPrinters?.[station] : '') || ''; }
+// Envía lo pendiente: marca las líneas como enviadas, guarda la comanda en el pedido y la imprime en la impresora de su estación
+function sendOrderToKitchen(order = getOrder(state.currentOrderId), { voidsOnly = false, quiet = false } = {}) {
+  if (!order) return { ok: false, comandas: [] };
+  const drafts = pendingComandas(order, { voidsOnly });
+  if (!voidsOnly) (order.items || []).forEach(item => { item.sentQty = Number(item.qty) || 0; delete item.kitchenNote; });
+  order.pendingVoids = [];
+  if (!drafts.length) { touchOrder(order); saveState(); if (!quiet) showToast('No hay productos nuevos para cocina.'); return { ok: true, comandas: [] }; }
+  const at = Date.now(), by = order.userName || actor().userName || '';
+  const comandas = drafts.map(d => ({ id: uid('cmd'), n: (state.comandaCounter = (Number(state.comandaCounter) || 0) + 1), at, by, tableName: order.tableName, orderNote: d.type === 'envio' ? String(order.note || '').trim() : '', ...d }));
+  order.comandas = [...(order.comandas || []), ...comandas.map(c => structuredClone(c))].slice(-50);
+  comandas.forEach(c => logAudit(c.type === 'anulacion' ? 'Comanda anulada' : 'Comanda enviada', `${c.stationLabel} #${c.n} · ${order.tableName} · ${c.items.map(i => `${i.qty} ${i.name}`).join(', ')}`));
+  touchOrder(order); saveState();
+  if (globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(() => {});
+  comandas.forEach(c => {
+    const html = buildComandaHtml(c, { paperWidth: printSettings().paperWidth, demo: isDemoMode() });
+    sendToPrinter(html, `${c.type === 'anulacion' ? 'Anulación' : 'Comanda'} ${c.stationLabel} #${c.n}`, { printerName: kitchenPrinterFor(c.station) });
+  });
+  if (!quiet) showToast(comandas.length === 1 ? `🔔 Comanda #${comandas[0].n} enviada a ${comandas[0].stationLabel}.` : `🔔 ${comandas.length} comandas enviadas (${[...new Set(comandas.map(c => c.stationLabel))].join(' y ')}).`);
+  return { ok: true, comandas };
+}
+// Una línea baja de cantidad: si toca lo ya enviado, exige permiso y deja la anulación pendiente. Devuelve false si no se permite.
+function registerKitchenReduction(order, item, newQty) {
+  const sent = itemSentQty(item), next = Math.max(0, Number(newQty) || 0);
+  if (next >= sent) return true;
+  if (!can('cancelOrder')) { showToast('Ese producto ya salió a cocina: pide al cajero o al administrador que lo anule.'); return false; }
+  order.pendingVoids = [...(order.pendingVoids || []), { productId: item.productId, name: item.name, category: itemCategory(item), qty: sent - next }];
+  item.sentQty = next;
+  return true;
+}
+// Un pedido que se elimina con productos ya enviados: anula todo lo enviado
+function voidAllSent(order) {
+  (order?.items || []).forEach(item => { const sent = itemSentQty(item); if (sent > 0) order.pendingVoids = [...(order.pendingVoids || []), { productId: item.productId, name: item.name, category: itemCategory(item), qty: sent }]; item.sentQty = 0; });
+  return sendOrderToKitchen(order, { voidsOnly: true, quiet: true });
+}
+function renderKitchenSettings() {
+  const list = document.querySelector('#kitchenStationList'); if (!list || !state) return;
+  const categories = [...new Set([...(state.categories || []), ...(state.products || []).map(p => p.category)].map(c => String(c || '').trim()).filter(c => c && c !== 'Todos'))];
+  list.innerHTML = categories.length ? categories.map(cat => `<label class="kitchen-station-row"><span>${escapeHtml(cat)}</span><select data-kitchen-category="${escapeHtml(cat)}">${Object.entries(KITCHEN_STATION_OPTIONS).map(([value, label]) => `<option value="${value}"${kitchenStationFor(cat) === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label>`).join('') : '<p class="muted">Crea categorías de productos para asignarlas.</p>';
+}
+globalThis.sendOrderToKitchen = sendOrderToKitchen;
+globalThis.kitchenPendingCount = kitchenPendingCount;
+globalThis.kitchenStationFor = kitchenStationFor;
 
 /* ============ Reportes analíticos ============ */
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'], WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];

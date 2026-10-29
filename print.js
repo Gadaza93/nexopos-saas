@@ -1,5 +1,5 @@
 /* NexoPos · Impresión de tickets térmicos (rollos de 58 y 80 mm)
-   - buildReceiptHtml / buildShiftZHtml: documento HTML completo del comprobante (sin scripts).
+   - buildReceiptHtml / buildShiftZHtml / buildComandaHtml: documento HTML completo del comprobante o la comanda (sin scripts).
    - printReceipt(html): un solo motor de impresión.
        · Escritorio (Electron): window.desktop.printReceipt → ventana oculta en main.js + webContents.print().
        · Web (PWA): <iframe> invisible + contentWindow.print(); se elimina al terminar.
@@ -143,6 +143,34 @@ ${mark}
   return receiptDocument('Ticket Z - Cierre de turno', body, { paperWidth });
 }
 
+// Comanda para una estación (cocina o barra): sin precios, letra grande. type 'anulacion' = productos que ya no se preparan.
+function buildComandaHtml(comanda, { paperWidth = 80, demo = false } = {}) {
+  const c = comanda || {}, items = Array.isArray(c.items) ? c.items : [], voided = c.type === 'anulacion';
+  const mark = demo ? `<div class="mark">${RECEIPT_DEMO_MARK}</div>` : '';
+  const itemsHtml = items.map(item => `<div class="item comanda-item"><div class="row"><span class="comanda-qty num">${receiptQty.format(Number(item.qty) || 0)}</span><span class="comanda-name">${receiptEscape(item.name)}</span></div>${item.note ? `<div class="comanda-note">→ ${receiptEscape(item.note)}</div>` : ''}</div>`).join('');
+  const body = `${mark}
+<style>
+  .station { font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+  .void { margin: 4px 0; padding: 4px; border: 2px solid #000; font-size: 16px; font-weight: 900; text-align: center; }
+  .comanda-item .row { justify-content: flex-start; gap: 8px; font-size: 16px; font-weight: 800; }
+  .comanda-qty { min-width: 2.2em; }
+  .comanda-name { text-align: left !important; overflow-wrap: anywhere; }
+  .comanda-note { margin-left: 2.8em; font-size: 14px; font-weight: 700; font-style: italic; }
+  .comanda-loc { font-size: 15px; font-weight: 800; }
+</style>
+<div class="center"><div class="station">${receiptEscape(c.stationLabel || 'Cocina')}</div>${voided ? '<div class="void">*** ANULACIÓN ***</div>' : ''}</div>
+<hr>
+<div class="row comanda-loc"><span>${receiptEscape(receiptLocation(c.tableName))}</span><span>#${receiptEscape(c.n || '')}</span></div>
+<div class="row"><span>Hora:</span><span>${receiptEscape(receiptDateTime(c.at || Date.now()))}</span></div>
+${c.by ? `<div class="row"><span>Mesero:</span><span>${receiptEscape(c.by)}</span></div>` : ''}
+<hr>
+${itemsHtml || '<div class="center">Sin productos</div>'}
+${c.orderNote ? `<hr><div class="bold">Nota: ${receiptEscape(c.orderNote)}</div>` : ''}
+<hr>
+${mark}`;
+  return receiptDocument(`${voided ? 'Anulación' : 'Comanda'} ${c.stationLabel || ''} #${c.n || ''}`.trim(), body, { paperWidth });
+}
+
 /* ---------- Motor de impresión ---------- */
 // Web: iframe invisible; espera el logo antes de imprimir y se elimina después
 function printViaIframe(html) {
@@ -181,7 +209,8 @@ async function printReceipt(html, { silent = false, printerName = null } = {}) {
 
 globalThis.buildReceiptHtml = buildReceiptHtml;
 globalThis.buildShiftZHtml = buildShiftZHtml;
+globalThis.buildComandaHtml = buildComandaHtml;
 globalThis.printReceipt = printReceipt;
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { buildReceiptHtml, buildShiftZHtml, printReceipt, printViaIframe, receiptLocation, RECEIPT_WIDTHS, RECEIPT_DEMO_MARK };
+  module.exports = { buildReceiptHtml, buildShiftZHtml, buildComandaHtml, printReceipt, printViaIframe, receiptLocation, RECEIPT_WIDTHS, RECEIPT_DEMO_MARK };
 }

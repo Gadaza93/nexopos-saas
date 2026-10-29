@@ -18,7 +18,7 @@ function mockElement() {
     value: '', textContent: '', innerHTML: '', hidden: false, disabled: false, open: false, style: {}, dataset: {}, checked: false, className: '',
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     addEventListener() {}, removeEventListener() {}, setAttribute() {}, removeAttribute() {}, toggleAttribute() {},
-    showModal() { this.open = true; }, close() { this.open = false; }, focus() {}, closest: () => null,
+    showModal() { this.open = true; }, close() { this.open = false; }, focus() {}, remove() {}, closest: () => null,
     querySelector: () => mockElement(), querySelectorAll: () => [], append() {}, appendChild() {}, matches: () => false
   };
 }

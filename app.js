@@ -815,9 +815,10 @@ function mergeOrderInto(source, target) {
   source.items.forEach(item => {
     if (!((Number(item.qty) || 0) > 0)) return;
     const same = target.items.find(i => i.productId === item.productId && Number(i.price) === Number(item.price));
-    if (same) same.qty = Number(same.qty) + Number(item.qty);
+    if (same) { same.qty = Number(same.qty) + Number(item.qty); same.sentQty = itemSentQty(same) + itemSentQty(item); if (item.kitchenNote) same.kitchenNote = [same.kitchenNote, item.kitchenNote].filter(Boolean).join(' · '); }
     else target.items.push(structuredClone(item));
   });
+  if (source.pendingVoids?.length) target.pendingVoids = [...(target.pendingVoids || []), ...source.pendingVoids];
   if (source.note) target.note = [target.note, `${source.tableName}: ${source.note}`].filter(Boolean).join(' · ');
   target.paidAmount = (Number(target.paidAmount) || 0) + (Number(source.paidAmount) || 0); // cobros por productos ya hechos en cualquiera de las dos
   target.createdAt = Math.min(target.createdAt || Date.now(), source.createdAt || Date.now());
@@ -1020,11 +1021,16 @@ function renderOrderDialog() {
   const ticketEl = document.querySelector('#ticketItems');
   if (ticketEl) {
     ticketEl.innerHTML = order.items.length
-      ? order.items.map(item => `
+      ? order.items.map(item => {
+          const kitchenReady = typeof itemGoesToKitchen === 'function'; // comandas viven en modules.js
+          const kitchen = kitchenReady && itemGoesToKitchen(item), sent = kitchen ? itemSentQty(item) : 0, unsent = kitchen ? itemUnsentQty(item) : 0;
+          const status = !kitchen ? '' : unsent ? `<span class="kitchen-tag pending">${sent ? `${sent} enviado${sent === 1 ? '' : 's'} · ` : ''}${unsent} por enviar</span>` : `<span class="kitchen-tag sent">✓ Enviado</span>`;
+          return `
           <div class="ticket-item">
             <div>
               <strong>${escapeHtml(item.name)}</strong>
               ${item.category ? `<small class="muted" style="display:block;font-size:11px;">${escapeHtml(item.category)}</small>` : ''}
+              ${status}
             </div>
             <span class="item-price">${money.format((item.price || 0) * (item.qty || 1))}</span>
             <div class="quantity-control">
@@ -1032,13 +1038,21 @@ function renderOrderDialog() {
               <span>${item.qty}</span>
               <button type="button" data-item-change="${escapeHtml(item.productId)}" data-delta="1" aria-label="Aumentar">+</button>
             </div>
+            ${kitchen && unsent ? `<input class="kitchen-note-input" type="text" maxlength="80" data-kitchen-note="${escapeHtml(item.productId)}" value="${escapeHtml(item.kitchenNote || '')}" placeholder="Nota para cocina (ej. sin cebolla)" aria-label="Nota para cocina de ${escapeHtml(item.name)}" />` : ''}
           </div>
-        `).join('')
+        `; }).join('')
       : '<p class="empty-ticket">Agrega productos para iniciar el pedido.</p>';
   }
 
   const orderTotalEl = document.querySelector('#orderTotal');
   if (orderTotalEl) orderTotalEl.textContent = money.format(orderPending(order));
+
+  const kitchenBtn = document.querySelector('#sendKitchenButton');
+  if (kitchenBtn && typeof kitchenPendingCount === 'function') {
+    const pending = kitchenPendingCount(order), voids = (order.pendingVoids || []).length;
+    kitchenBtn.disabled = !pending;
+    kitchenBtn.textContent = pending ? `🔔 Enviar a cocina (${pending}${voids ? ' · incluye anulación' : ''})` : '🔔 Todo enviado a cocina';
+  }
 
   const deleteBtn = document.querySelector('#deleteOrderButton');
   if (deleteBtn) deleteBtn.style.visibility = order.items.length ? 'visible' : 'hidden';
@@ -1085,8 +1099,8 @@ function addProduct(productId) {
   renderOrderDialog();
 }
 globalThis.addProduct = addProduct;
-function changeItem(productId, delta) { const order=getOrder(state.currentOrderId); const item=order?.items.find(i=>i.productId===productId); if(!item)return; item.qty+=Number(delta); if(item.qty<=0)order.items=order.items.filter(i=>i!==item); order.sync_status='pending'; order.updatedAt=Date.now(); saveState(); if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{}); renderOrderDialog(); }
-function saveOrder() { const order=getOrder(state.currentOrderId); if(!order)return; order.note=document.querySelector('#orderNote').value.trim(); order.sync_status='pending'; order.updatedAt=Date.now(); if(!order.items.length){state.orders=state.orders.filter(o=>o.id!==order.id);saveState();if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{});document.querySelector('#orderDialog').close();state.currentOrderId=null;renderAll();return showToast('Pedido vacío descartado.');} saveState();if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{});document.querySelector('#orderDialog').close();state.currentOrderId=null;renderAll();showToast('Pedido guardado. Queda abierto hasta cobrarlo.'); }
+function changeItem(productId, delta) { const order=getOrder(state.currentOrderId); const item=order?.items.find(i=>i.productId===productId); if(!item)return; if(Number(delta)<0 && !registerKitchenReduction(order,item,item.qty+Number(delta)))return; item.qty+=Number(delta); if(item.qty<=0)order.items=order.items.filter(i=>i!==item); order.sync_status='pending'; order.updatedAt=Date.now(); saveState(); if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{}); renderOrderDialog(); }
+function saveOrder() { const order=getOrder(state.currentOrderId); if(!order)return; order.note=document.querySelector('#orderNote').value.trim(); order.sync_status='pending'; order.updatedAt=Date.now(); if(order.pendingVoids?.length)sendOrderToKitchen(order,{voidsOnly:true,quiet:true}); if(!order.items.length){state.orders=state.orders.filter(o=>o.id!==order.id);saveState();if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{});document.querySelector('#orderDialog').close();state.currentOrderId=null;renderAll();return showToast('Pedido vacío descartado.');} saveState();if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{});document.querySelector('#orderDialog').close();state.currentOrderId=null;renderAll();showToast('Pedido guardado. Queda abierto hasta cobrarlo.'); }
 const PAYMENT_METHODS = ['Efectivo', 'Nequi', 'Daviplata', 'Tarjeta / Datáfono', 'Transferencia'];
 let activePaymentMethod = 'Efectivo';
 let currentCheckout = null;
@@ -1357,6 +1371,8 @@ function confirmPayment() {
   }
 
   let splitEntries = null; // partes iguales cobradas en este pago (se enlazan a la factura más abajo)
+  // Cobrar primero (cafetería, mostrador): lo que aún no salió a cocina se envía ahora
+  if (kitchenPendingCount(order)) sendOrderToKitchen(order, { quiet: true });
   deductInventory({ items: currentCheckout.items });
 
   if (currentCheckout.type === 'full') {
@@ -1367,7 +1383,7 @@ function confirmPayment() {
   } else if (currentCheckout.type === 'selection') {
     currentCheckout.items.forEach(selItem => {
       const oi = order.items.find(i => i.productId === selItem.productId);
-      if (oi) oi.qty -= selItem.qty;
+      if (oi) { oi.qty -= selItem.qty; oi.sentQty = Math.min(Number(oi.sentQty) || 0, Math.max(0, oi.qty)); } // cobrado, no anulado: lo que queda sigue enviado
     });
     order.items = order.items.filter(i => i.qty > 0);
     order.paidAmount = Number(order.paidAmount || 0) + currentCheckout.total;
@@ -1976,9 +1992,9 @@ globalThis.printShiftZ = printShiftZ;
 const PRINT_DEFAULTS = { paperWidth: 80, silent: false, printerName: '' };
 let printerList = null; // impresoras del sistema (solo escritorio), se consultan una vez
 function printSettings() { state.printSettings = { ...PRINT_DEFAULTS, ...(state.printSettings || {}) }; return state.printSettings; }
-async function sendToPrinter(html, label = 'Ticket') {
+async function sendToPrinter(html, label = 'Ticket', { printerName = '' } = {}) {
   const settings = printSettings(), silent = Boolean(globalThis.desktop?.printReceipt) && settings.silent;
-  const result = await printReceipt(html, { silent, printerName: settings.printerName || null });
+  const result = await printReceipt(html, { silent, printerName: printerName || settings.printerName || null });
   if (result?.ok) { if (silent) showToast(`🖨 ${label} enviado a la impresora.`); }
   else if (!result?.cancelled) showToast(`⚠ No se pudo imprimir: ${result?.error || 'revisa la impresora'}.`);
   return result;
@@ -2009,8 +2025,15 @@ function renderPrintSettings() {
       .concat(list.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.displayName)}</option>`));
     if (saved && !list.some(p => p.name === saved)) options.push(`<option value="${escapeHtml(saved)}">${escapeHtml(saved)} (no conectada)</option>`);
     printerEl.innerHTML = options.join(''); printerEl.value = saved || '';
+    // Impresora de cada estación de comandas: vacía = la misma de los tickets
+    document.querySelectorAll('[data-station-printer]').forEach(el => {
+      const station = el.dataset.stationPrinter, savedStation = settings.stationPrinters?.[station] || '';
+      el.innerHTML = ['<option value="">La misma de los tickets</option>'].concat(list.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.displayName)}</option>`), savedStation && !list.some(p => p.name === savedStation) ? [`<option value="${escapeHtml(savedStation)}">${escapeHtml(savedStation)} (no conectada)</option>`] : []).join('');
+      el.value = savedStation;
+    });
     if (!printerList) loadPrinterList();
   }
+  if (typeof renderKitchenSettings === 'function') renderKitchenSettings();
 }
 function savePrintSetting(key, value) { printSettings()[key] = value; saveState(); renderPrintSettings(); }
 globalThis.printPaymentReceipt = printPaymentReceipt;
@@ -2177,6 +2200,7 @@ document.addEventListener('click', event => {
   if (target.id === 'newCustomOrderButton') openCustomOrderDialog();
   if (target.id === 'createCustomOrderButton') createCustomOrder();
   if (target.id === 'saveOrderButton') saveOrder();
+  if (target.id === 'sendKitchenButton') { sendOrderToKitchen(); renderOrderDialog(); }
   if (target.id === 'chargeButton') openPayment();
   if (target.id === 'confirmPaymentButton') confirmPayment();
   if (target.id === 'deleteOrderButton') deleteCurrentOrder();
@@ -2217,6 +2241,9 @@ if (searchEl) {
     renderOrderDialog();
   });
 }
+// Nota para cocina de una línea: se guarda sin volver a pintar (no pierde el foco); sale en la próxima comanda
+document.addEventListener('input', e => { const productId = e.target.dataset?.kitchenNote; if (productId === undefined) return; const item = getOrder(state.currentOrderId)?.items.find(i => i.productId === productId); if (item) { item.kitchenNote = e.target.value.slice(0, 80); saveState(); } });
+document.addEventListener('change', e => { const category = e.target.dataset?.kitchenCategory; if (category !== undefined) { setKitchenStation(category, e.target.value); showToast(`${category}: ${KITCHEN_STATION_OPTIONS[e.target.value]}.`); } else if (e.target.dataset?.stationPrinter) { printSettings().stationPrinters = { ...(printSettings().stationPrinters || {}), [e.target.dataset.stationPrinter]: e.target.value }; saveState(); } });
 document.querySelector('#orderNote').addEventListener('input', e => { const order = getOrder(state.currentOrderId); if (order) { order.note = e.target.value; saveState(); } });
 document.querySelector('#amountReceived').addEventListener('input', updateTenderChange);
 document.querySelector('#tenderCashReceived')?.addEventListener('input', updateTenderChange);
