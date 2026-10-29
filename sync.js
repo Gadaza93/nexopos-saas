@@ -1873,6 +1873,9 @@ async function syncAll(options = {}) {
   try {
     const stockLogs = (typeof state !== "undefined" && Array.isArray(state.stockLog)) ? state.stockLog : [];
     const rawMermas = stockLogs.filter(l => l.delta && String(l.delta).startsWith("-"));
+    // Las entradas que suman (stock inicial, ajustes y conteos a favor) no tienen tabla en la nube: su efecto ya viaja
+    // como movimiento de stock o de insumo. Sin esto quedaban «pendientes» para siempre en el indicador.
+    stockLogs.forEach(l => { if (isPendingSync(l) && !rawMermas.includes(l)) l.sync_status = "synced"; });
     const pendingMermas = rawMermas.filter(l => options.force || isPendingSync(l));
     if (pendingMermas.length > 0) {
       const records = pendingMermas.map(l => sanitizeMerma(l, bId));

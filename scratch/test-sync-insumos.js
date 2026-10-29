@@ -41,7 +41,11 @@ function nuevaCaja(nombre, sb) {
     async descargar() { usar(); const r = await sync.pullAllFromSupabase(BID); assert.strictEqual(r.ok, true, `${nombre}: descarga`); },
     async subir() { usar(); return sync.syncAll(); },
     // Como saveInsumo (modules.js): nuevo y pendiente
-    crearInsumo(id, name, unit, qty, cost) { st.insumos.push({ id, name, unit, qty, min: 1, cost, createdAt: Date.now(), updatedAt: Date.now(), sync_status: 'pending' }); },
+    crearInsumo(id, name, unit, qty, cost) {
+      st.insumos.push({ id, name, unit, qty, min: 1, cost, createdAt: Date.now(), updatedAt: Date.now(), sync_status: 'pending' });
+      // saveInsumo deja el stock inicial en el historial de ajustes (delta positivo: no sube como merma)
+      st.stockLog.push({ id: `stk-${id}`, type: 'ajuste', reasonCategory: 'Stock inicial', itemId: id, itemName: name, unit, delta: qty, sync_status: 'pending' });
+    },
     // Como consumeRecipe / savePurchase / saveWaste / applyCount: solo cambian qty (y la compra, el costo)
     mover(id, delta) { ins(id).qty = Math.round((ins(id).qty + delta) * 10000) / 10000; },
     comprar(id, qty, nuevoCosto) { this.mover(id, qty); Object.assign(ins(id), { cost: nuevoCosto, sync_status: 'pending', updatedAt: Date.now() }); },

@@ -603,7 +603,7 @@ function renderStats() {
   document.querySelector('#salesToday').textContent = money.format(sold);
   document.querySelector('#salesCount').textContent = `${payments.length} ${payments.length === 1 ? 'cuenta cerrada' : 'cuentas cerradas'}`;
   document.querySelector('#activeTables').textContent = activeTableOrders.length;
-  document.querySelector('#activeItems').textContent = `${active.reduce((s,o)=>s+o.items.reduce((n,i)=>n+(Number(i.qty)||0),0),0)} bebidas y snacks`;
+  document.querySelector('#activeItems').textContent = `${active.reduce((s,o)=>s+o.items.reduce((n,i)=>n+(Number(i.qty)||0),0),0)} productos en mesas`;
   document.querySelector('#openOrdersCount').textContent = active.length;
   document.querySelector('#cashExpected').textContent = isShiftOpen() ? money.format(expectedCash()) : 'Caja cerrada';
 }
