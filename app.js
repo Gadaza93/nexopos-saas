@@ -1835,6 +1835,8 @@ function saveExpense() {
 }
 function openShiftDialog() { if(isShiftOpen())return openCloseDialog();document.querySelector('#openingCash').value='';document.querySelector('#openShiftDialog').showModal(); }
 function confirmOpenShift() {
+  // Con el formulario abierto, otra caja pudo abrir el turno (tiempo real): nunca dos turnos abiertos a la vez
+  if (isShiftOpen()) { document.querySelector('#openShiftDialog').close(); renderAll(); return showToast('Ya hay un turno de caja abierto.'); }
   const raw = document.querySelector('#openingCash').value, openingCash = Number(raw);
   if (raw === '' || openingCash < 0) return showToast('Indica la base inicial de efectivo, incluso si es $0.');
   state.cashShift = { id: uid('shift'), status: 'open', date: today(), openedAt: Date.now(), openingCash };
