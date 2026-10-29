@@ -1515,6 +1515,7 @@ html[data-theme="light"] .login-dialog::backdrop { background: radial-gradient(5
 .recipe-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .recipe-head .field-label { margin: 0; }
 .recipe-head .outline-button { min-height: 34px; padding: 0 12px; }
+.recipe-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .recipe-lines { display: grid; gap: 6px; max-height: 220px; overflow: auto; }
 .recipe-line { display: grid; grid-template-columns: minmax(0, 1fr) 72px 62px 74px 26px; gap: 6px; align-items: center; }
 .recipe-line select, .recipe-line input { margin: 0; min-width: 0; }

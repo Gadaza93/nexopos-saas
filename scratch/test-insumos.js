@@ -172,4 +172,22 @@ run('state.insumos.push({ id: "ins_sal", name: "Sal", unit: "g", qty: 0, min: 0,
 assert(!get('state.insumos.some(i => i.id === "ins_sal")'), 'uno sin recetas sí se elimina');
 ok('Merma valorizada al costo del insumo; ajuste manual; eliminar protegido si está en recetas');
 
+// 6. Crear un insumo desde la receta del producto
+console.log('\n6. «+ Crear insumo» desde la receta...');
+run(`resetScenario(); recipeDraft = [{ insumoId: 'ins_arroz', qty: 150, unit: 'g' }, { insumoId: 'ins_arroz', qty: 0, unit: 'g' }];
+  openInsumoDialog(null, { forRecipe: true });`);
+setVal('#insumoName', 'Lenteja'); setVal('#insumoUnit', 'kg'); setVal('#insumoQty', '2'); setVal('#insumoMin', '1'); setVal('#insumoCost', '7000');
+run('saveInsumo();');
+const lenteja = get('state.insumos.find(i => i.name === "Lenteja")');
+assert.deepStrictEqual([lenteja.qty, lenteja.unit], [2, 'kg'], 'se crea con su stock');
+assert.deepStrictEqual(get('recipeDraft.map(l => [l.insumoId, l.qty, l.unit])'), [['ins_arroz', 150, 'g'], [lenteja.id, 0, 'g']], 'reemplaza la línea vacía, en gramos');
+assert.match(get('toasts[toasts.length - 1]'), /Lenteja creado y agregado a la receta/);
+run(`openInsumoDialog(null, { forRecipe: true });`);
+setVal('#insumoName', 'Sal'); setVal('#insumoUnit', 'g'); setVal('#insumoQty', '500'); setVal('#insumoMin', '0'); setVal('#insumoCost', '5');
+run(`recipeDraft[1].qty = 200; saveInsumo();`);
+assert.strictEqual(get('recipeDraft.length'), 3, 'con todas las líneas llenas, agrega una nueva');
+run(`openInsumoDialog(); document.querySelector('#insumoName').value = 'Ajo'; saveInsumo();`);
+assert.strictEqual(get('recipeDraft.length'), 3, 'desde Inventario no toca la receta');
+ok('Creado desde la receta queda en ella (reutiliza la línea vacía); desde Inventario no la toca');
+
 console.log('\n=== TODAS LAS PRUEBAS DE INSUMOS PASARON ===');

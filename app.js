@@ -2359,6 +2359,8 @@ document.addEventListener('click', event => {
   if (target.id === 'saveModifierGroupButton') saveModifierGroup();
   if (target.id === 'deleteModifierGroupButton') deleteModifierGroup();
   if (target.id === 'newInsumoButton') openInsumoDialog();
+  if (target.id === 'createRecipeInsumoButton') openInsumoDialog(null, { forRecipe: true });
+  if (target.id === 'goToInsumosButton') { document.querySelector('.nav-link[data-view="inventory"]')?.click(); document.querySelector('.insumos-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   if (target.id === 'saveInsumoButton') saveInsumo();
   if (target.id === 'deleteInsumoButton') deleteInsumo();
   if (target.dataset.editInsumo) openInsumoDialog(target.dataset.editInsumo);

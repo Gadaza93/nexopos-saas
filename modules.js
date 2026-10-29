@@ -632,8 +632,10 @@ function insumoStatus(ins) { return ins.qty <= 0 ? ['status-out', 'Agotado'] : i
 function insumoUsage(id) { return (state.products || []).filter(p => isPrepared(p) && recipeLines(p).some(l => l.insumoId === id)); }
 
 let editingInsumoId = null;
-function openInsumoDialog(id = null) {
+let insumoForRecipe = false; // abierto con «+ Crear insumo» desde la receta del producto
+function openInsumoDialog(id = null, { forRecipe = false } = {}) {
   const ins = id ? insumoById(id) : null; editingInsumoId = ins?.id || null;
+  insumoForRecipe = forRecipe && !ins;
   const unitEl = document.querySelector('#insumoUnit');
   unitEl.innerHTML = (ins ? compatibleUnits(ins.unit) : Object.keys(INSUMO_UNITS)).map(u => `<option value="${u}">${INSUMO_UNITS[u].label}</option>`).join('');
   unitEl.value = ins?.unit || 'kg';
@@ -665,6 +667,7 @@ function saveInsumo() {
     if (qty) logStock({ type: 'ajuste', reasonCategory: 'Stock inicial', itemId: ins.id, itemName: name, unit, delta: qty, cost, value: qty * cost, reason: 'Stock inicial' });
   }
   refreshPreparedCosts(); saveState(); document.querySelector('#insumoDialog').close(); renderAll();
+  if (insumoForRecipe && !editingInsumoId) { insumoForRecipe = false; return useNewInsumoInRecipe(ins); }
   showToast(editingInsumoId ? 'Insumo actualizado.' : 'Insumo creado.');
 }
 function deleteInsumo(id = editingInsumoId) {
@@ -702,9 +705,16 @@ function toggleProductType() {
   if (prepared && !recipeDraft.length && (state.insumos || []).length) addRecipeLine();
   else renderRecipeDraft();
 }
+// El insumo recién creado desde la receta queda puesto en ella (reutiliza la última línea si quedó vacía)
+function useNewInsumoInRecipe(ins) {
+  const last = recipeDraft[recipeDraft.length - 1], line = { insumoId: ins.id, qty: 0, unit: defaultRecipeUnit(ins.unit) };
+  if (last && !(Number(last.qty) > 0)) Object.assign(last, line); else recipeDraft.push(line);
+  renderRecipeDraft();
+  showToast(`${ins.name} creado y agregado a la receta: indica la cantidad por porción.`);
+}
 function addRecipeLine() {
   const first = (state.insumos || [])[0];
-  if (!first) return showToast('Primero crea insumos en Inventario → Insumos.');
+  if (!first) return openInsumoDialog(null, { forRecipe: true }); // sin insumos: se crea el primero aquí mismo
   recipeDraft.push({ insumoId: first.id, qty: 0, unit: defaultRecipeUnit(first.unit) });
   renderRecipeDraft();
 }
@@ -717,7 +727,7 @@ function renderRecipeDraft() {
     const ins = insumoById(line.insumoId), units = ins ? compatibleUnits(ins.unit) : [line.unit];
     const lineCost = ins ? recipeLineUse(line, ins) * (Number(ins.cost) || 0) : 0;
     return `<div class="recipe-line"><select data-recipe-index="${index}" data-recipe-field="insumoId" aria-label="Insumo">${insumos.map(i => `<option value="${i.id}"${i.id === line.insumoId ? ' selected' : ''}>${escapeHtml(i.name)}</option>`).join('')}</select><input data-recipe-index="${index}" data-recipe-field="qty" type="number" min="0" step="any" inputmode="decimal" value="${line.qty || ''}" placeholder="0" aria-label="Cantidad por porción" /><select data-recipe-index="${index}" data-recipe-field="unit" aria-label="Unidad">${units.map(u => `<option value="${u}"${u === line.unit ? ' selected' : ''}>${u}</option>`).join('')}</select><span class="recipe-line-cost">${money.format(Math.round(lineCost))}</span><button type="button" class="remove-line" data-remove-recipe-line="${index}" aria-label="Quitar insumo">×</button></div>`;
-  }).join('') : `<p class="muted recipe-empty">${(state.insumos || []).length ? 'Agrega los insumos de una porción.' : 'Aún no hay insumos: créalos en Inventario → Insumos.'}</p>`;
+  }).join('') : `<p class="muted recipe-empty">${(state.insumos || []).length ? 'Agrega los insumos de una porción.' : 'Aún no hay insumos: usa «+ Crear insumo».'}</p>`;
   updateRecipeSummary();
 }
 function updateRecipeSummary() {
