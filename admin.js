@@ -5,9 +5,8 @@
    La verificación de rol aquí es solo de interfaz: las RPC deben comprobar el rol en el servidor. */
 
 // Mismo proyecto que sync.js (no se carga sync.js aquí: arrancaría el ciclo de sincronización del POS).
-// Vacío = sin proyecto de Supabase configurado todavía: el panel no se conecta.
-const ADMIN_SUPABASE_URL = globalThis.NEXO_SUPABASE_URL || '';
-const ADMIN_SUPABASE_ANON_KEY = globalThis.NEXO_SUPABASE_ANON_KEY || '';
+const ADMIN_SUPABASE_URL = globalThis.NEXO_SUPABASE_URL || 'https://voesyutyotonbktndrum.supabase.co';
+const ADMIN_SUPABASE_ANON_KEY = globalThis.NEXO_SUPABASE_ANON_KEY || 'sb_publishable_FCYyjpjy8SOBzQkEcYAfjA_N6hzP3bh';
 // Clave propia y sessionStorage: no se mezcla con la sesión de la terminal y se cierra con la pestaña
 const ADMIN_AUTH_KEY = 'nexopos-superadmin-auth';
 const EXTEND_DAYS = 30;

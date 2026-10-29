@@ -1,8 +1,9 @@
 // Motor de sincronización NexoPos
-// Sin proyecto de Supabase propio todavía: vacío = sin nube (getClient() devuelve null y la app trabaja 100% offline).
-// Las pruebas lo definen con globalThis.NEXO_SUPABASE_URL / NEXO_SUPABASE_ANON_KEY (scratch/setup-pruebas.js).
-const SUPABASE_URL = globalThis.NEXO_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = globalThis.NEXO_SUPABASE_ANON_KEY || "";
+// Proyecto de Supabase de NexoPos («Nexopos-saas»; esquema en supabase/migrations). Nunca el de NexoBar.
+// La clave publicable va en el cliente a propósito: la seguridad la dan las políticas RLS.
+// Las pruebas lo cambian por uno ficticio con globalThis.NEXO_SUPABASE_URL / NEXO_SUPABASE_ANON_KEY (scratch/setup-pruebas.js).
+const SUPABASE_URL = globalThis.NEXO_SUPABASE_URL || "https://voesyutyotonbktndrum.supabase.co";
+const SUPABASE_ANON_KEY = globalThis.NEXO_SUPABASE_ANON_KEY || "sb_publishable_FCYyjpjy8SOBzQkEcYAfjA_N6hzP3bh";
 const DEFAULT_BUSINESS_ID = "nexopos_default";
 
 let syncClient = null;
