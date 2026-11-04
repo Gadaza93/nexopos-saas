@@ -83,7 +83,7 @@ function generatePassword(length = 8, rng) {
   for (let i = chars.length - 1; i > 0; i--) { const j = randomIndex(i + 1, rng); [chars[i], chars[j]] = [chars[j], chars[i]]; }
   return chars.join('');
 }
-// Valida el formulario y arma los parámetros de admin_create_negocio
+// Valida el formulario y arma los datos para admin-crear-negocio (la Edge Function repite estas reglas)
 function buildCreatePayload({ nombre, negocioId, email, password, plan, dias }) {
   const p_nombre = String(nombre || '').trim(), p_id = String(negocioId || '').trim().toLowerCase();
   const p_email = String(email || '').trim().toLowerCase(), p_password = String(password || '');
@@ -156,11 +156,14 @@ async function deleteNegocio(id, confirmacion) {
   if (error) throw new Error(describeDeleteError(error));
   return data || {};
 }
+// Edge Function admin-crear-negocio (supabase/functions): la contraseña va por HTTPS al servicio de autenticación y nunca
+// como argumento de una función SQL (la RPC admin_create_negocio podía dejarla en los registros de la base)
 async function createNegocio(payload) {
   try {
-    const { data, error } = await getAdminClient().rpc('admin_create_negocio', payload);
+    const { data, error } = await getAdminClient().functions.invoke('admin-crear-negocio', { body: payload });
     if (error) return { ok: false, error: describeCreateError(error) };
-    return { ok: true, data };
+    if (!data?.ok) return { ok: false, error: describeCreateError(data?.error) };
+    return { ok: true, data: data.data };
   } catch (err) {
     return { ok: false, error: 'No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.' };
   }

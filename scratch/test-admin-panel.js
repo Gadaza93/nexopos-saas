@@ -9,13 +9,15 @@ console.log('=== PRUEBAS: PANEL SUPERADMIN ===\n');
 
 globalThis.__IS_NODE_TEST__ = true;
 let signInResult = null, signOutCalls = 0, rpcCalls = [], rpcResult = { data: [], error: null };
+let fnCalls = [], fnResult = { data: { ok: true, data: {} }, error: null };
 globalThis.supabase = {
   createClient: () => ({
     auth: {
       signInWithPassword: async () => signInResult,
       signOut: async () => { signOutCalls++; return { error: null }; }
     },
-    rpc: async (name, params) => { rpcCalls.push({ name, params }); return rpcResult; }
+    rpc: async (name, params) => { rpcCalls.push({ name, params }); return rpcResult; },
+    functions: { invoke: async (name, options) => { fnCalls.push({ name, body: options?.body }); return fnResult; } }
   })
 };
 const admin = require('../admin.js');
@@ -109,21 +111,27 @@ const admin = require('../admin.js');
   assert.strictEqual(admin.buildCreatePayload({ ...form, plan: 'basico' }).payload.p_plan, 'basico');
   console.log('   ✅ Validación del formulario: ID, correo, contraseña, plan y días.');
 
-  rpcCalls = []; rpcResult = { data: { id: 'bar_la_estacion' }, error: null };
+  rpcCalls = []; fnCalls = []; fnResult = { data: { ok: true, data: { success: true, id: 'bar_la_estacion' } }, error: null };
   let created = await admin.createNegocio(built.payload);
   assert.strictEqual(created.ok, true);
-  assert.deepStrictEqual(rpcCalls, [{ name: 'admin_create_negocio', params: { p_id: 'bar_la_estacion', p_nombre: 'Gastrobar La Estación', p_email: 'laestacion@bar.com', p_password: 'Ab3kP9xq', p_plan: 'pro', p_dias_vigencia: 30 } }]);
-  console.log('   ✅ admin_create_negocio recibe p_id, p_nombre, p_email, p_password, p_plan y p_dias_vigencia.');
+  assert.deepStrictEqual(created.data, { success: true, id: 'bar_la_estacion' });
+  assert.deepStrictEqual(fnCalls, [{ name: 'admin-crear-negocio', body: { p_id: 'bar_la_estacion', p_nombre: 'Gastrobar La Estación', p_email: 'laestacion@bar.com', p_password: 'Ab3kP9xq', p_plan: 'pro', p_dias_vigencia: 30 } }]);
+  assert.deepStrictEqual(rpcCalls, [], 'La contraseña ya no viaja como argumento de una RPC (admin_create_negocio)');
+  console.log('   ✅ La Edge Function admin-crear-negocio recibe los datos; la contraseña no pasa por ninguna función SQL.');
 
-  rpcResult = { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "users_email_partial_key"' } };
+  // Errores que devuelve la Edge Function (200 con { ok: false, error: { code, message } })
+  const fnError = (code, message) => ({ data: { ok: false, error: { code, message } }, error: null });
+  fnResult = fnError('23505', 'El correo "laestacion@bar.com" ya está registrado con otro negocio.');
   assert.strictEqual((await admin.createNegocio(built.payload)).error, 'Ya existe una cuenta con ese correo. Usa otro correo para la terminal.');
-  rpcResult = { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "negocios_pkey"', details: 'Key (id)=(bar_la_estacion) already exists.' } };
+  fnResult = fnError('23505', 'El ID de negocio "bar_la_estacion" ya está en uso.');
   assert.strictEqual((await admin.createNegocio(built.payload)).error, 'Ese ID de negocio ya está en uso. Elige otro.');
-  rpcResult = { data: null, error: { code: '42501', message: 'permission denied for function admin_create_negocio' } };
+  fnResult = fnError('42501', 'No autorizado: solo el SuperAdmin puede crear negocios.');
   assert.match((await admin.createNegocio(built.payload)).error, /permisos de SuperAdmin/);
-  rpcResult = { data: null, error: { code: 'P0001', message: 'invalid email format' } };
-  assert.strictEqual((await admin.createNegocio(built.payload)).error, 'No se pudo crear el negocio: invalid email format');
-  console.log('   ✅ Errores claros: correo duplicado, ID ocupado, sin permisos y otros mensajes de la RPC.');
+  fnResult = fnError('22023', 'El correo no es válido.');
+  assert.strictEqual((await admin.createNegocio(built.payload)).error, 'No se pudo crear el negocio: El correo no es válido.');
+  fnResult = { data: null, error: { name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function' } };
+  assert.match((await admin.createNegocio(built.payload)).error, /No se pudo crear el negocio: Failed to send/);
+  console.log('   ✅ Errores claros: correo duplicado, ID ocupado, sin permisos, validación y sin conexión con la función.');
 
   const text = admin.credentialsText(built.payload);
   assert.match(text, /Correo: laestacion@bar\.com/);

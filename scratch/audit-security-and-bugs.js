@@ -46,7 +46,7 @@ function createEnv() {
   };
   ctx.globalThis = ctx; ctx.window.document = document;
   vm.createContext(ctx);
-  for (const file of ['demo-mode.js', 'storage.js', 'modules.js', 'sync.js', 'print.js', 'app.js']) vm.runInContext(read(file), ctx, { filename: file });
+  for (const file of ['demo-mode.js', 'planes.js', 'storage.js', 'modules.js', 'sync.js', 'print.js', 'app.js']) vm.runInContext(read(file), ctx, { filename: file });
   const run = code => vm.runInContext(code, ctx);
   const get = code => { const json = run(`JSON.stringify(${code})`); return json === undefined ? undefined : JSON.parse(json); };
   run(`var __toasts = []; showToast = m => __toasts.push(String(m)); renderAll = renderAll; saveState = () => {};
@@ -165,7 +165,8 @@ const unscopedWrites = (syncSrc.match(/\.from\("[a-z_]+"\)\.delete\(\)\.(eq|in)\
 check('Supabase', 'Media', `sync.js: ${unscopedWrites.length} borrados por id sin filtro business_id (dependen solo del RLS; defensa en profundidad)`, unscopedWrites.length > 0,
   unscopedWrites.map(s => s.slice(0, 60)).join(' | '));
 check('Supabase', 'Media', 'La sesión de la terminal (refresh token) vive en localStorage: un XSS puede robarla', /localStorage\.setItem\(key, value\)/.test(read('storage.js')));
-check('Supabase', 'Media', 'admin_create_negocio recibe la contraseña en claro como argumento de una función SQL (puede quedar en logs de PostgREST/Postgres)', /p_password/.test(read('admin.js')));
+// El alta va por la Edge Function admin-crear-negocio (auth.admin.createUser); la RPC vieja se revoca con supabase/migrations/20261104120000_*
+check('Supabase', 'Media', 'admin_create_negocio recibe la contraseña en claro como argumento de una función SQL (puede quedar en logs de PostgREST/Postgres)', /rpc\(\s*['"]admin_create_negocio['"]/.test(read('admin.js')));
 const adminSrc = read('admin.js');
 check('Supabase', 'Alta', 'admin.js: el rol SuperAdmin se lee de app_metadata (no editable por el usuario)', !/app_metadata\?\.role === 'superadmin'/.test(adminSrc) || /user_metadata\?\.role/.test(adminSrc));
 
