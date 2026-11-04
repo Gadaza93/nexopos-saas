@@ -2663,7 +2663,8 @@ function relinkTerminal() {
    Una caja que aún no tiene hora del servidor (SQL sin aplicar) solo se bloquea por activo=false. */
 const LICENCIA_GRACIA_MS = 3 * 86400000, LICENCIA_OFFLINE_MS = 7 * 86400000;
 const RELOJ_TOLERANCIA_MS = 3600000, RELOJ_GUARDADO_MS = 600000;
-function isSubscriptionSuspended() { return !isDemoMode() && state?.subscription?.active === false; }
+// Suspendida o eliminada por el superadmin: bloquea en el acto, aunque haya cuentas abiertas
+function isSubscriptionSuspended() { return !isDemoMode() && (state?.subscription?.active === false || state?.subscription?.deleted === true); }
 function registerLicenseCheck(serverNow, local = Date.now()) {
   if (isDemoMode() || !state || !Number.isFinite(serverNow)) return;
   state.subscription = { ...(state.subscription || {}), verifiedAt: serverNow, offsetMs: serverNow - local, localMax: local };
@@ -2683,6 +2684,7 @@ function licenseClock(now = Date.now()) {
 function licenseBlockReason(now = Date.now()) {
   if (isDemoMode() || !state?.subscription) return null;
   const sub = state.subscription, expires = sub.expiresAt ? Date.parse(sub.expiresAt) : NaN, clock = licenseClock(now);
+  if (sub.deleted === true) return 'eliminada'; // confirmado con la nube en verificarNegocioEliminado (sync.js)
   if (sub.active === false) return Number.isFinite(expires) && expires < (clock?.now ?? now) ? 'vencida' : 'suspendida';
   if (!clock) return null;
   if (clock.tampered) return 'reloj';
@@ -2697,6 +2699,7 @@ const SUSPENDED_TEXTS = {
   vencida: ['Licencia vencida', 'Tu suscripción venció', '', 'Renueva tu plan o comunícate con soporte para seguir usando NexoPos.'],
   reloj: ['Revisa la hora', 'La hora de este equipo cambió', 'La fecha u hora de este equipo está atrasada respecto a la última verificación. ', 'Corrige la hora y conéctate a internet para verificar tu licencia.'],
   'sin-verificar': ['Verificación pendiente', 'Conéctate a internet', `Esta caja lleva más de ${LICENCIA_OFFLINE_MS / 86400000} días sin verificar la licencia. `, 'Conéctate a internet y toca Verificar.'],
+  eliminada: ['Cuenta eliminada', 'Este negocio fue eliminado', 'La cuenta de este negocio ya no existe en la nube y esta caja dejó de sincronizar. ', 'Descarga un respaldo de tus datos y comunícate con soporte.'],
 };
 function renderSuspended(reason) {
   const [badge, title, text, strong] = SUSPENDED_TEXTS[reason] || SUSPENDED_TEXTS.suspendida;
@@ -2733,7 +2736,7 @@ async function retrySubscriptionCheck() {
     if (navigator.onLine && !(await NexoSync.hasAuthSession())) { note.textContent = 'La sesión de esta caja venció: vuelve a vincularla para verificar.'; await showActivation({ relink: true }); }
     const res = await NexoSync.pullAllFromSupabase();
     const reason = licenseBlockReason();
-    note.textContent = !res?.ok ? fail : reason === 'suspendida' ? 'Tu cuenta sigue suspendida.' : reason === 'vencida' ? 'Tu suscripción sigue vencida.' : reason ? fail : '';
+    note.textContent = reason === 'eliminada' ? 'Este negocio sigue sin existir en la nube.' : !res?.ok ? fail : reason === 'suspendida' ? 'Tu cuenta sigue suspendida.' : reason === 'vencida' ? 'Tu suscripción sigue vencida.' : reason ? fail : '';
   } catch { note.textContent = fail; }
   button.disabled = false;
 }
@@ -2753,7 +2756,7 @@ function subscriptionInfo(sub, now = Date.now()) {
   const known = Boolean(sub && (typeof sub.active === 'boolean' || sub.plan || sub.expiresAt));
   const expires = sub?.expiresAt ? new Date(sub.expiresAt) : null, validDate = expires && !Number.isNaN(expires.getTime());
   const daysLeft = validDate ? Math.ceil((expires.getTime() - now) / 86400000) : null;
-  const active = sub?.active !== false;
+  const active = sub?.active !== false && sub?.deleted !== true; // eliminada: la tarjeta deja de decir «Licencia activa»
   let banner = null;
   if (known && active && daysLeft !== null && daysLeft <= SUBSCRIPTION_WARN_DAYS) {
     const when = daysLeft < 0 ? 'Tu suscripción está vencida' : daysLeft === 0 ? 'Tu suscripción vence hoy' : `Tu suscripción vence en ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'}`;

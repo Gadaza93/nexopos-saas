@@ -307,7 +307,8 @@ function applySubscriptionStatus(negocio) {
   if (typeof negocio.activo === "boolean") next.active = negocio.activo;
   if (typeof negocio.plan === "string") next.plan = negocio.plan;
   if ("fecha_vencimiento" in negocio) next.expiresAt = negocio.fecha_vencimiento || null;
-  if (next.active === prev.active && next.plan === prev.plan && next.expiresAt === prev.expiresAt) return;
+  if (prev.deleted) { delete next.deleted; delete next.deletedAt; } // el negocio volvió a existir (creado de nuevo y caja vinculada)
+  if (next.active === prev.active && next.plan === prev.plan && next.expiresAt === prev.expiresAt && !prev.deleted) return;
   state.subscription = { ...next, checkedAt: Date.now() };
   if (typeof scheduleSave === "function") scheduleSave();
   if (typeof enforceSubscription === "function") {
@@ -320,6 +321,31 @@ function applySubscriptionStatus(negocio) {
   if (next.plan !== prev.plan && typeof enforcePlanSession === "function") {
     try { enforcePlanSession(); } catch (e) { /* ignore */ }
   }
+}
+
+/* Negocio eliminado por el superadmin (admin_delete_negocio borra la fila de negocios y las cuentas del negocio).
+   Bloquea la caja con el motivo «eliminada» solo con DOS señales a la vez: la fila de negocios no existe y el servidor
+   de autenticación responde que la cuenta de la sesión ya no existe (user_not_found). Una lista vacía sola (red, RLS,
+   sesión vencida) nunca bloquea una caja. Se revisa en cada descarga y con el aviso de borrado en tiempo real; con el
+   token ya vencido no se puede confirmar y rige «sin verificar» (7 días). Prueba: scratch/test-negocio-eliminado.js */
+async function verificarNegocioEliminado(sb, bId) {
+  if (isDemoMode() || !sb || !bId || typeof state === "undefined" || !state) return false;
+  try {
+    const { data, error } = await sb.from("negocios").select("id").eq("id", bId).maybeSingle();
+    if (error || data) return false;
+    const { data: quien, error: userError } = await sb.auth.getUser();
+    const cuentaBorrada = userError && (userError.code === "user_not_found" || /sub claim in JWT does not exist/i.test(userError.message || ""));
+    if (!cuentaBorrada || quien?.user) return false;
+  } catch (e) {
+    return false;
+  }
+  state.subscription = { ...(state.subscription || {}), deleted: true, deletedAt: Date.now(), checkedAt: Date.now() };
+  console.warn("[NexoSync] ⛔ El negocio de esta caja fue eliminado en la nube: se bloquea la caja (los datos locales se conservan).");
+  if (typeof scheduleSave === "function") scheduleSave();
+  await signOutTerminal(); // la sesión ya no sirve: así tampoco se intenta sincronizar
+  if (typeof enforceSubscription === "function") { try { enforceSubscription(); } catch (e) { /* ignore */ } }
+  if (typeof renderSubscription === "function") { try { renderSubscription(); } catch (e) { /* ignore */ } }
+  return true;
 }
 
 // 2. Sanitizadores previos antes de cada upsert
@@ -1986,6 +2012,7 @@ async function pullAllFromSupabase(businessId) {
       const tablaPedidos = await usaTablaPedidos(sb);
       await usaStockMovimientos(sb); // antes de mezclar el stock de los productos
       const { data: negData, error: negErr } = await sb.from("negocios").select("*").eq("id", bId).maybeSingle();
+      if (!negErr && !negData && await verificarNegocioEliminado(sb, bId)) { updateIndicator("auth"); return { ok: false, error: "Negocio eliminado" }; }
       if (!negErr && negData) {
         applySubscriptionStatus(negData);
         const serverNow = await fetchServerTime(sb);
@@ -2608,6 +2635,10 @@ function setupRealtime() {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "pedidos_activos", filter: `business_id=eq.${bId}` }, payload => aplicarPedidoEnVivo(payload))
       // Supabase no filtra los DELETE: llegan solo con el id (con RLS) y se ignoran si no son de esta caja
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "pedidos_activos" }, payload => retirarPedidoEnVivo(payload?.old?.id))
+      // El superadmin eliminó este negocio: se confirma con la nube antes de bloquear (verificarNegocioEliminado)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "negocios" }, payload => {
+        if (String(payload?.old?.id || "") === String(bId)) verificarNegocioEliminado(sb, bId).catch(() => {});
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "turnos_caja", filter: `business_id=eq.${bId}` }, payload => {
         if (typeof state !== "undefined" && state) {
           if (payload?.eventType === "DELETE" || (!payload?.new && payload?.old)) {
@@ -2845,6 +2876,7 @@ rootScope.NexoSync = {
   hasAuthSession,
   signOutTerminal,
   applySubscriptionStatus,
+  verificarNegocioEliminado,
   init,
   syncAll,
   syncData,
