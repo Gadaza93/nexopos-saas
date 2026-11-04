@@ -1426,6 +1426,10 @@ html[data-theme="light"] .login-dialog::backdrop { background: radial-gradient(5
    alto cubre los navegadores sin Popover API. Se anulan los estilos por defecto de [popover].
    ========================================================================== */
 .toast { z-index: 100000; inset: auto; bottom: 24px; left: 50%; margin: 0; overflow: visible; width: max-content; max-width: calc(100vw - 32px); height: auto; }
+/* En el salón el aviso sube por encima de la barra del total por cobrar (fija abajo) para no taparla.
+   Con un modal abierto el aviso vive dentro del modal y la barra queda detrás: no hace falta subirlo. */
+body:has(#pos.active-view > #openMoneyBar:not([hidden])):not(:has(dialog[open])) .toast { bottom: 92px; }
+@media (max-width: 768px) { body:has(#pos.active-view > #openMoneyBar:not([hidden])):not(:has(dialog[open])) .toast { bottom: 104px; } }
 
 /* ==========================================================================
    Mi negocio: grid de 2 columnas en pantallas anchas
