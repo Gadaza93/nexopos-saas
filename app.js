@@ -1285,7 +1285,7 @@ function renderTipControls() {
   row.hidden = !currentCheckout.tipSuggested && !tip; // sin propina sugerida (mostrador, para llevar) no se ofrece
   const on = document.querySelector('#tipEnabled'), amount = document.querySelector('#tipAmount'), label = document.querySelector('#tipLabel');
   if (on) { on.checked = tip > 0; on.disabled = locked; }
-  if (amount) { if (document.activeElement !== amount) amount.value = tip ? String(tip) : ''; amount.disabled = locked || !tip; }
+  if (amount) { if (document.activeElement !== amount) amount.value = tip ? formatMoneyInput(tip) : ''; amount.disabled = locked || !tip; }
   if (label) label.textContent = `Propina voluntaria${tipPercent() ? ` (sugerida ${tipPercent()} %)` : ''}`;
   const hint = document.querySelector('#tipHint');
   if (hint) hint.textContent = locked ? 'Quita los pagos agregados para cambiar la propina.' : `Consumo ${money.format(currentCheckout.total)}${tip ? ` + propina ${money.format(tip)}` : ' · sin propina'}`;
@@ -1320,7 +1320,7 @@ function refreshPaymentUI() {
 
   const amountInput = document.querySelector('#amountReceived');
   if (amountInput && document.activeElement !== amountInput) {
-    amountInput.value = pending > 0 ? pending : '';
+    amountInput.value = pending > 0 ? formatMoneyInput(pending) : '';
   }
 
   const cashBox = document.querySelector('#tenderCashBox');
@@ -1347,8 +1347,8 @@ function refreshPaymentUI() {
 
 function updateTenderChange() {
   if (!currentCheckout) return;
-  const tenderAmount = Number(document.querySelector('#amountReceived')?.value || 0);
-  const cashReceived = Number(document.querySelector('#tenderCashReceived')?.value || 0);
+  const tenderAmount = moneyInputValue(document.querySelector('#amountReceived')?.value);
+  const cashReceived = moneyInputValue(document.querySelector('#tenderCashReceived')?.value);
   const changeMsg = document.querySelector('#changeMessage');
   if (!changeMsg) return;
 
@@ -1386,14 +1386,14 @@ function addPaymentTender() {
   const pending = Math.max(0, checkoutDue() - covered);
   if (pending <= 0) return showToast('El total de la cuenta ya está cubierto.');
 
-  let amount = Number(document.querySelector('#amountReceived')?.value || 0);
+  let amount = moneyInputValue(document.querySelector('#amountReceived')?.value);
   if (amount <= 0) return showToast('Ingresa un monto válido a pagar.');
   if (amount > pending) amount = pending;
 
   let received = amount;
   let change = 0;
   if (activePaymentMethod === 'Efectivo') {
-    const rawCash = Number(document.querySelector('#tenderCashReceived')?.value || 0);
+    const rawCash = moneyInputValue(document.querySelector('#tenderCashReceived')?.value);
     if (rawCash > 0) {
       if (rawCash < amount) return showToast('El efectivo recibido es menor que el monto a abonar.');
       received = rawCash;
@@ -1495,7 +1495,7 @@ function confirmPayment() {
     let received = pending;
     let change = 0;
     if (activePaymentMethod === 'Efectivo') {
-      const rawCash = Number(document.querySelector('#tenderCashReceived')?.value || 0);
+      const rawCash = moneyInputValue(document.querySelector('#tenderCashReceived')?.value);
       if (rawCash > 0) {
         if (rawCash < pending) return showToast('El efectivo recibido es menor que el total.');
         received = rawCash;
@@ -1831,8 +1831,8 @@ function chargeSelectedSplitItems() {
   });
 }
 function openInventoryDialog(itemId=null) { const select=document.querySelector('#inventorySelect'); select.innerHTML=typeof stockItemOptions==='function'?stockItemOptions():state.inventory.map(i=>`<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)} (${formatQty(i.qty)} ${escapeHtml(i.unit)})</option>`).join(''); if(itemId)select.value=itemId; document.querySelector('#inventoryAmount').value='';document.querySelector('#inventoryReason').value='';document.querySelector('#inventoryDialog').showModal(); }
-function openProductDialog(productId=null) { editingProductId=productId;const product=productId && state.products.find(item=>item.id===productId), stock=product && state.inventory.find(item=>item.id===product.inventoryId);pendingProductImage=product?.image || null;document.querySelector('#productName').value=product?.name || '';document.querySelector('#productCategory').value=product?.category || '';document.querySelector('#productCost').value=product?.cost ?? '';document.querySelector('#productPrice').value=product?.price ?? '';document.querySelector('#productStock').value=stock?.qty ?? '';document.querySelector('#productMinStock').value=stock?.min ?? 5;document.querySelector('#productUnit').value=stock?.unit || 'und';document.querySelector('#productImage').value='';setImagePreview(document.querySelector('#productImagePreview'),pendingProductImage,product?.icon || '🍾');document.querySelector('#productDialog h2').textContent=product ? 'Editar producto' : 'Nuevo producto';document.querySelector('#saveProductButton').textContent=product ? 'Guardar cambios' : 'Crear producto';if(typeof fillProductRecipe==='function')fillProductRecipe(product);document.querySelector('#productDialog').showModal(); }
-function saveProduct() { const name=document.querySelector('#productName').value.trim(), category=document.querySelector('#productCategory').value.trim() || 'Otros'; if(document.querySelector('#productType')?.value==='preparado' && typeof savePreparedProduct==='function') return savePreparedProduct({ name, category, price: Number(document.querySelector('#productPrice').value), editingId: editingProductId }); const costRaw=document.querySelector('#productCost').value, priceRaw=document.querySelector('#productPrice').value, stockRaw=document.querySelector('#productStock').value, minRaw=document.querySelector('#productMinStock').value; const cost=Number(costRaw), price=Number(priceRaw), stock=Number(stockRaw || 0), min=minRaw==='' ? 5 : Number(minRaw || 0), unit=document.querySelector('#productUnit').value; if(!name || costRaw==='' || priceRaw==='' || cost<0 || price<=0 || stock<0 || min<0) return showToast('Completa nombre, costo, precio de venta y existencias válidas.');if(!state.categories.includes(category))state.categories.push(category);let product=editingProductId && state.products.find(item=>item.id===editingProductId);if(product){const supply=state.inventory.find(item=>item.id===product.inventoryId);delete product.tipo;delete product.receta;product.name=name;product.category=category;product.cost=cost;product.price=price;product.image=pendingProductImage;product.sync_status='pending';if(supply){supply.name=name;supply.unit=unit;supply.qty=stock;supply.min=min;}else{const inventoryId=uid('inv');state.inventory.push({id:inventoryId,name,unit,qty:stock,min});product.inventoryId=inventoryId;product.recipe={[inventoryId]:1};}}else{const inventoryId=uid('inv'), productId=uid('prod');state.inventory.push({id:inventoryId,name,unit,qty:stock,min});state.products.push({id:productId,name,category,cost,price,icon:'🍾',image:pendingProductImage,inventoryId,recipe:{[inventoryId]:1},sync_status:'pending'});}saveState();document.querySelector('#productDialog').close();renderAll();showToast(product ? 'Producto actualizado.' : 'Producto creado con su stock inicial.'); }
+function openProductDialog(productId=null) { editingProductId=productId;const product=productId && state.products.find(item=>item.id===productId), stock=product && state.inventory.find(item=>item.id===product.inventoryId);pendingProductImage=product?.image || null;document.querySelector('#productName').value=product?.name || '';document.querySelector('#productCategory').value=product?.category || '';document.querySelector('#productCost').value=formatMoneyInput(product?.cost ?? '');document.querySelector('#productPrice').value=formatMoneyInput(product?.price ?? '');document.querySelector('#productStock').value=stock?.qty ?? '';document.querySelector('#productMinStock').value=stock?.min ?? 5;document.querySelector('#productUnit').value=stock?.unit || 'und';document.querySelector('#productImage').value='';setImagePreview(document.querySelector('#productImagePreview'),pendingProductImage,product?.icon || '🍾');document.querySelector('#productDialog h2').textContent=product ? 'Editar producto' : 'Nuevo producto';document.querySelector('#saveProductButton').textContent=product ? 'Guardar cambios' : 'Crear producto';if(typeof fillProductRecipe==='function')fillProductRecipe(product);document.querySelector('#productDialog').showModal(); }
+function saveProduct() { const name=document.querySelector('#productName').value.trim(), category=document.querySelector('#productCategory').value.trim() || 'Otros'; if(document.querySelector('#productType')?.value==='preparado' && typeof savePreparedProduct==='function') return savePreparedProduct({ name, category, price: moneyInputValue(document.querySelector('#productPrice').value), editingId: editingProductId }); const costRaw=moneyDigits(document.querySelector('#productCost').value), priceRaw=moneyDigits(document.querySelector('#productPrice').value), stockRaw=document.querySelector('#productStock').value, minRaw=document.querySelector('#productMinStock').value; const cost=Number(costRaw), price=Number(priceRaw), stock=Number(stockRaw || 0), min=minRaw==='' ? 5 : Number(minRaw || 0), unit=document.querySelector('#productUnit').value; if(!name || costRaw==='' || priceRaw==='' || cost<0 || price<=0 || stock<0 || min<0) return showToast('Completa nombre, costo, precio de venta y existencias válidas.');if(!state.categories.includes(category))state.categories.push(category);let product=editingProductId && state.products.find(item=>item.id===editingProductId);if(product){const supply=state.inventory.find(item=>item.id===product.inventoryId);delete product.tipo;delete product.receta;product.name=name;product.category=category;product.cost=cost;product.price=price;product.image=pendingProductImage;product.sync_status='pending';if(supply){supply.name=name;supply.unit=unit;supply.qty=stock;supply.min=min;}else{const inventoryId=uid('inv');state.inventory.push({id:inventoryId,name,unit,qty:stock,min});product.inventoryId=inventoryId;product.recipe={[inventoryId]:1};}}else{const inventoryId=uid('inv'), productId=uid('prod');state.inventory.push({id:inventoryId,name,unit,qty:stock,min});state.products.push({id:productId,name,category,cost,price,icon:'🍾',image:pendingProductImage,inventoryId,recipe:{[inventoryId]:1},sync_status:'pending'});}saveState();document.querySelector('#productDialog').close();renderAll();showToast(product ? 'Producto actualizado.' : 'Producto creado con su stock inicial.'); }
 function deleteProduct(productId) { const product=state.products.find(item=>item.id===productId);if(!product)return;if(!window.confirm(`¿Eliminar ${product.name}? Esta acción no borra facturas ni ventas históricas.`))return;if(globalThis.NexoSync?.deleteProduct){globalThis.NexoSync.deleteProduct(productId);}else if(globalThis.NexoSync?.trackProductDeletion){globalThis.NexoSync.trackProductDeletion(productId);}const targetInventoryId=product.inventoryId || `stock-${productId}`;state.products=state.products.filter(item=>item.id!==productId);if(state.products.length===0){state.inventory=[];}else{const validInventoryIds=new Set(state.products.map(p=>p.inventoryId).filter(Boolean));state.inventory=state.inventory.filter(item=>item.id!==targetInventoryId&&item.id!==product.inventoryId&&item.id!==`stock-${productId}`&&item.id!==productId&&validInventoryIds.has(item.id));}saveState();renderAll();showToast('Producto eliminado del catálogo.'); }
 globalThis.deleteProduct = deleteProduct;
 function openCategoriesDialog() { renderCategoryList();document.querySelector('#newCategoryName').value='';document.querySelector('#categoriesDialog').showModal(); }
@@ -1902,7 +1902,7 @@ function renderPurchaseLines() {
   document.querySelector('#purchaseLines').innerHTML = purchaseDraft.map((line, index) => {
     const item = purchaseItem(line.productId), units = item?.unit && typeof compatibleUnits === 'function' ? compatibleUnits(item.unit) : null;
     const unitSelect = units ? `<select class="purchase-unit" data-purchase-index="${index}" data-purchase-field="unit" aria-label="Unidad de compra">${units.map(u => `<option value="${u}"${u === line.unit ? ' selected' : ''}>${u}</option>`).join('')}</select>` : '';
-    return `<div class="purchase-line${units ? ' with-unit' : ''}"><select data-purchase-index="${index}" data-purchase-field="productId">${selectOptions}</select><input data-purchase-index="${index}" data-purchase-field="qty" type="number" min="0.1" step="any" value="${line.qty}" aria-label="Cantidad" />${unitSelect}<input data-purchase-index="${index}" data-purchase-field="unitCost" type="number" min="0" value="${line.unitCost}" aria-label="${units ? 'Costo por ' + line.unit : 'Costo unitario'}" title="${units ? 'Costo por ' + line.unit : 'Costo unitario'}" /><button class="remove-line" data-remove-purchase-line="${index}" aria-label="Eliminar producto">×</button></div>`;
+    return `<div class="purchase-line${units ? ' with-unit' : ''}"><select data-purchase-index="${index}" data-purchase-field="productId">${selectOptions}</select><input data-purchase-index="${index}" data-purchase-field="qty" type="number" min="0.1" step="any" value="${line.qty}" aria-label="Cantidad" />${unitSelect}<input data-purchase-index="${index}" data-purchase-field="unitCost" ${units ? `type="number" min="0" step="any" value="${line.unitCost}"` : `type="text" inputmode="numeric" autocomplete="off" data-money value="${formatMoneyInput(line.unitCost)}"`} aria-label="${units ? 'Costo por ' + line.unit : 'Costo unitario'}" title="${units ? 'Costo por ' + line.unit : 'Costo unitario'}" /><button class="remove-line" data-remove-purchase-line="${index}" aria-label="Eliminar producto">×</button></div>`;
   }).join('');
   purchaseDraft.forEach((line, index) => { const select = document.querySelector(`[data-purchase-index="${index}"][data-purchase-field="productId"]`); if (select) select.value = line.productId; });
   updatePurchaseTotal();
@@ -1912,7 +1912,7 @@ function updatePurchaseDraft(target) {
   const field = target.dataset.purchaseField;
   if (field === 'productId') { Object.assign(line, newPurchaseLine(purchaseItem(target.value)), { qty: line.qty }); if (!purchaseItem(target.value)?.unit) delete line.unit; return renderPurchaseLines(); }
   if (field === 'unit') { line.unit = target.value; line.unitCost = defaultUnitCost(purchaseItem(line.productId), line.unit); return renderPurchaseLines(); }
-  line[field] = Number(target.value || 0); updatePurchaseTotal();
+  line[field] = target.hasAttribute?.('data-money') ? moneyInputValue(target.value) : Number(target.value || 0); updatePurchaseTotal();
 }
 function updatePurchaseTotal() { document.querySelector('#purchaseTotal').textContent=money.format(purchaseDraft.reduce((sum,line)=>sum+(Number(line.qty)||0)*(Number(line.unitCost)||0),0)); }
 function addPurchaseLine() { purchaseDraft.push(newPurchaseLine());renderPurchaseLines(); }
@@ -1922,7 +1922,7 @@ function saveExpense() {
   if (!requireOpenShift()) return;
   const category = document.querySelector('#expenseCategory').value,
         description = document.querySelector('#expenseDescription').value.trim(),
-        amount = Number(document.querySelector('#expenseAmount').value),
+        amount = moneyInputValue(document.querySelector('#expenseAmount').value),
         method = document.querySelector('#expenseMethod').value,
         date = document.querySelector('#expenseDate').value;
   if (!description || !date) return showToast('Completa la descripción, el valor y la fecha del gasto.');
@@ -1952,7 +1952,7 @@ function openShiftDialog() { if(isShiftOpen())return openCloseDialog();document.
 function confirmOpenShift() {
   // Con el formulario abierto, otra caja pudo abrir el turno (tiempo real): nunca dos turnos abiertos a la vez
   if (isShiftOpen()) { document.querySelector('#openShiftDialog').close(); renderAll(); return showToast('Ya hay un turno de caja abierto.'); }
-  const raw = document.querySelector('#openingCash').value, openingCash = Number(raw);
+  const raw = moneyDigits(document.querySelector('#openingCash').value), openingCash = Number(raw);
   if (raw === '' || openingCash < 0) return showToast('Indica la base inicial de efectivo, incluso si es $0.');
   state.cashShift = { id: uid('shift'), status: 'open', date: today(), openedAt: Date.now(), openingCash };
   saveState();
@@ -1966,12 +1966,12 @@ function confirmOpenShift() {
 // Propinas del turno en el resumen del cierre: van aparte de las ventas (las de efectivo ya están en el efectivo esperado)
 function tipsCloseRow() { const t = tipsToday(); return t.total ? `<div><span>Propinas (no son ventas)</span><strong>${money.format(t.total)}${t.cash !== t.total ? ` · efectivo ${money.format(t.cash)}` : ''}</strong></div>` : ''; }
 function openCloseDialog() { if(!isShiftOpen())return openShiftDialog();const expected=expectedCash(), totalSales=currentShiftPayments().reduce((sum,payment)=>sum+payment.amount,0);document.querySelector('#closeSummary').innerHTML=`<div><span>Base inicial</span><strong>${money.format(state.cashShift.openingCash || 0)}</strong></div><div><span>Ventas en efectivo</span><strong>${money.format(cashSalesToday())}</strong></div><div><span>Ventas por otros medios</span><strong>${money.format(otherSalesToday())}</strong></div><div><span>Compras y gastos en efectivo</span><strong>− ${money.format(cashExpensesToday()+cashPurchasesToday())}</strong></div><div><span>Venta total del turno</span><strong>${money.format(totalSales)}</strong></div>${tipsCloseRow()}`;document.querySelector('#expectedCashInClose').textContent=money.format(expected);document.querySelector('#countedCash').value=0;resetCashCounter();document.querySelector('#cashDifference').textContent='';document.querySelector('#closeDialog').showModal(); }
-function checkCashDifference() { const diff=Number(document.querySelector('#countedCash').value||0)-expectedCash();const el=document.querySelector('#cashDifference');el.textContent=diff===0?'Caja cuadrada.':`${diff>0?'Sobrante':'Faltante'}: ${money.format(Math.abs(diff))}`;el.className=`change-message ${diff===0?'positive':'negative'}`; }
+function checkCashDifference() { const diff=moneyInputValue(document.querySelector('#countedCash').value)-expectedCash();const el=document.querySelector('#cashDifference');el.textContent=diff===0?'Caja cuadrada.':`${diff>0?'Sobrante':'Faltante'}: ${money.format(Math.abs(diff))}`;el.className=`change-message ${diff===0?'positive':'negative'}`; }
 let lastClosedShift = null;
 function confirmClose() {
   if (!isShiftOpen()) return;
   const expected = expectedCash(),
-        counted = Number(document.querySelector('#countedCash').value || 0),
+        counted = moneyInputValue(document.querySelector('#countedCash').value),
         totalSales = currentShiftPayments().reduce((sum, payment) => sum + payment.amount, 0);
   if (!Number.isFinite(counted) || counted < 0) return showToast('El efectivo contado no puede ser negativo.');
 
@@ -2449,7 +2449,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'tipEnabled' && currentCheckout) setCheckoutTip(e.target.checked ? (currentCheckout.tipSuggested || Math.round(currentCheckout.total * tipPercent() / 100)) : 0);
   else if (e.target.id === 'tipPercentInput') saveTipPercent(e.target.value);
 });
-document.addEventListener('input', e => { if (e.target.id === 'tipAmount') setCheckoutTip(e.target.value); });
+document.addEventListener('input', e => { if (e.target.id === 'tipAmount') setCheckoutTip(moneyInputValue(e.target.value)); });
 // Nota para cocina de una línea: se guarda sin volver a pintar (no pierde el foco); sale en la próxima comanda
 document.addEventListener('input', e => { const key = e.target.dataset?.kitchenNote; if (key === undefined) return; const item = getOrder(state.currentOrderId)?.items.find(i => lineKey(i) === key); if (item) { item.kitchenNote = e.target.value.slice(0, 80); saveState(); } });
 document.addEventListener('change', e => { const category = e.target.dataset?.kitchenCategory; if (category !== undefined) { setKitchenStation(category, e.target.value); showToast(`${category}: ${KITCHEN_STATION_OPTIONS[e.target.value]}.`); } else if (e.target.dataset?.stationPrinter) { printSettings().stationPrinters = { ...(printSettings().stationPrinters || {}), [e.target.dataset.stationPrinter]: e.target.value }; saveState(); } });
@@ -2897,7 +2897,7 @@ const BILLS=[2000,5000,10000,20000,50000,100000], COINS=[50,100,200,500,1000];
 function cashCounterRow(value,kind) { return `<label class="denom-row"><span class="denom-label">${money.format(value)}</span><input type="number" min="0" step="1" inputmode="numeric" placeholder="0" data-denom="${value}" data-kind="${kind}" aria-label="Cantidad de ${kind} de ${money.format(value)}" /><b class="denom-sub" data-denom-sub="${value}">$0</b></label>`; }
 function renderCashCounter() { const el=document.querySelector('#cashCounter'); if(!el)return; el.innerHTML=`<div class="denom-group"><h4>Billetes</h4>${BILLS.map(v=>cashCounterRow(v,'billetes')).join('')}</div><div class="denom-group"><h4>Monedas</h4>${COINS.map(v=>cashCounterRow(v,'monedas')).join('')}</div>`; }
 function cashCounts() { const counts={}; document.querySelectorAll('#cashCounter input[data-denom]').forEach(input=>{const qty=Math.max(0,Math.floor(Number(input.value||0)));if(qty)counts[input.dataset.denom]=qty;}); return counts; }
-function updateCashCounter() { let total=0; document.querySelectorAll('#cashCounter input[data-denom]').forEach(input=>{const value=Number(input.dataset.denom),qty=Math.max(0,Math.floor(Number(input.value||0))),sub=value*qty;total+=sub;document.querySelector(`[data-denom-sub="${value}"]`).textContent=money.format(sub);}); document.querySelector('#countedCash').value=total; checkCashDifference(); }
+function updateCashCounter() { let total=0; document.querySelectorAll('#cashCounter input[data-denom]').forEach(input=>{const value=Number(input.dataset.denom),qty=Math.max(0,Math.floor(Number(input.value||0))),sub=value*qty;total+=sub;document.querySelector(`[data-denom-sub="${value}"]`).textContent=money.format(sub);}); document.querySelector('#countedCash').value=formatMoneyInput(total); checkCashDifference(); }
 function resetCashCounter() { renderCashCounter(); }
 if (!globalThis.__IS_NODE_TEST__) {
   renderCashCounter();

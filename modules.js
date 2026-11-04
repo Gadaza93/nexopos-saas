@@ -36,6 +36,30 @@ function deny() { showToast('Tu rol no tiene permiso para esta acción.'); }
 function guard(name, perm) { const original = globalThis[name]; if (typeof original !== 'function') return; globalThis[name] = function (...args) { if (!can(perm)) { deny(); return; } return original.apply(this, args); }; }
 function planGuard(name, feature) { const original = globalThis[name]; if (typeof original !== 'function') return; globalThis[name] = function (...args) { if (!requirePlan(feature)) return; return original.apply(this, args); }; }
 function initials(name) { return String(name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?'; }
+// Campos de dinero: se escriben con punto de miles («70.000»), en pesos sin decimales. Se marcan con data-money
+// (type="text" inputmode="numeric"): se leen con moneyInputValue / moneyDigits y se llenan con formatMoneyInput.
+function moneyDigits(value) { return String(value ?? '').replace(/\D/g, ''); }
+function moneyInputValue(value) { const d = moneyDigits(value); return d === '' ? 0 : Number(d); }
+function formatMoneyInput(value) {
+  if (value === '' || value === null || value === undefined || !Number.isFinite(Number(value))) return '';
+  const n = Math.round(Number(value));
+  return (n < 0 ? '-' : '') + String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+// Reescribe el campo mientras se teclea y deja el cursor detrás de la misma cifra
+function formatMoneyField(input) {
+  const before = input.value, caret = input.selectionStart ?? before.length;
+  const digitsLeft = moneyDigits(before.slice(0, caret)).replace(/^0+(?=\d)/, '').length;
+  const digits = moneyDigits(before).replace(/^0+(?=\d)/, '');
+  const next = digits === '' ? '' : formatMoneyInput(Number(digits));
+  if (next === before) return;
+  input.value = next;
+  let pos = 0, seen = 0; while (pos < next.length && seen < digitsLeft) { if (/\d/.test(next[pos])) seen++; pos++; }
+  try { input.setSelectionRange(pos, pos); } catch (e) { /* sin foco */ }
+}
+// En captura: el campo ya tiene el punto cuando lo leen los demás manejadores de «input»
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('input', e => { const t = e.target; if (t && typeof t.matches === 'function' && t.matches('input[data-money]')) formatMoneyField(t); }, true);
+}
 function fmtDateTime(ts) { return new Date(ts).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
 
 function cyrb53(str, seed = 0) { let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed; for (let i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); }
@@ -376,7 +400,7 @@ function renderInvoiceTenders() {
   box.hidden = !mixed; if (select) select.disabled = mixed;
   if (!mixed) return;
   const methods = Array.from(new Set([...(typeof PAYMENT_METHODS !== 'undefined' ? PAYMENT_METHODS : ['Efectivo']), ...invoiceDraft.tenders.map(t => t.method)].filter(Boolean)));
-  document.querySelector('#invoiceTenders').innerHTML = invoiceDraft.tenders.map((t, i) => `<div class="invoice-tender-row"><select data-inv-tender="${i}" data-inv-tender-field="method" aria-label="Medio de pago">${methods.map(m => `<option ${m === t.method ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select><input type="number" min="0" step="100" value="${t.amount}" data-inv-tender="${i}" data-inv-tender-field="amount" aria-label="Monto" /><button class="remove-line" data-remove-inv-tender="${i}" title="Quitar este medio">×</button></div>`).join('');
+  document.querySelector('#invoiceTenders').innerHTML = invoiceDraft.tenders.map((t, i) => `<div class="invoice-tender-row"><select data-inv-tender="${i}" data-inv-tender-field="method" aria-label="Medio de pago">${methods.map(m => `<option ${m === t.method ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select><input type="text" inputmode="numeric" autocomplete="off" data-money value="${formatMoneyInput(t.amount)}" data-inv-tender="${i}" data-inv-tender-field="amount" aria-label="Monto" /><button class="remove-line" data-remove-inv-tender="${i}" title="Quitar este medio">×</button></div>`).join('');
   renderInvoiceTendersStatus();
 }
 function renderInvoiceTendersStatus() {
@@ -387,7 +411,7 @@ function renderInvoiceTendersStatus() {
 }
 function renderInvoiceDraft() {
   if (!invoiceDraft) return; const original = state.payments.find(p => p.id === invoiceDraft.id), total = draftTotal(), diff = total - (original?.amount || 0);
-  document.querySelector('#invoiceLines').innerHTML = invoiceDraft.items.map((item, index) => `<div class="invoice-line"><strong>${escapeHtml(item.name)}</strong><input type="number" min="0" step="1" value="${item.qty}" data-inv-line="${index}" data-inv-field="qty" aria-label="Cantidad" /><input type="number" min="0" step="100" value="${item.price}" data-inv-line="${index}" data-inv-field="price" aria-label="Precio unitario" /><b>${money.format((Number(item.price) || 0) * (Number(item.qty) || 0))}</b><button class="remove-line" data-remove-inv-line="${index}" aria-label="Quitar producto">×</button></div>`).join('');
+  document.querySelector('#invoiceLines').innerHTML = invoiceDraft.items.map((item, index) => `<div class="invoice-line"><strong>${escapeHtml(item.name)}</strong><input type="number" min="0" step="1" value="${item.qty}" data-inv-line="${index}" data-inv-field="qty" aria-label="Cantidad" /><input type="text" inputmode="numeric" autocomplete="off" data-money value="${formatMoneyInput(item.price)}" data-inv-line="${index}" data-inv-field="price" aria-label="Precio unitario" /><b>${money.format((Number(item.price) || 0) * (Number(item.qty) || 0))}</b><button class="remove-line" data-remove-inv-line="${index}" aria-label="Quitar producto">×</button></div>`).join('');
   document.querySelector('#invoiceNewTotal').textContent = money.format(total);
   document.querySelector('#invoiceDiff').textContent = diff === 0 ? 'El total no cambia.' : `Total original ${money.format(original?.amount || 0)} · diferencia ${diff > 0 ? '+' : '−'}${money.format(Math.abs(diff))}`;
   renderInvoiceTenders();
@@ -643,7 +667,7 @@ function openInsumoDialog(id = null, { forRecipe = false } = {}) {
   document.querySelector('#insumoQty').value = ins ? roundInsumoQty(ins.qty) : '';
   document.querySelector('#insumoQty').disabled = Boolean(ins); // con el insumo creado, el stock cambia por compras, ajustes, mermas o conteo
   document.querySelector('#insumoMin').value = ins ? roundInsumoQty(ins.min) : '';
-  document.querySelector('#insumoCost').value = ins ? Math.round(ins.cost) : '';
+  document.querySelector('#insumoCost').value = ins ? formatMoneyInput(ins.cost) : '';
   document.querySelector('#insumoDialog h2').textContent = ins ? 'Editar insumo' : 'Nuevo insumo';
   document.querySelector('#deleteInsumoButton').hidden = !ins;
   updateInsumoUnitLabels();
@@ -652,7 +676,7 @@ function openInsumoDialog(id = null, { forRecipe = false } = {}) {
 function updateInsumoUnitLabels() { const unit = document.querySelector('#insumoUnit')?.value || 'kg'; document.querySelectorAll('[data-insumo-unit-label]').forEach(el => { el.textContent = unit; }); }
 function saveInsumo() {
   const name = document.querySelector('#insumoName').value.trim(), unit = document.querySelector('#insumoUnit').value;
-  const qty = Number(document.querySelector('#insumoQty').value || 0), min = Number(document.querySelector('#insumoMin').value || 0), cost = Number(document.querySelector('#insumoCost').value || 0);
+  const qty = Number(document.querySelector('#insumoQty').value || 0), min = Number(document.querySelector('#insumoMin').value || 0), cost = moneyInputValue(document.querySelector('#insumoCost').value);
   if (!name || !INSUMO_UNITS[unit]) return showToast('Escribe el nombre y la unidad del insumo.');
   if (qty < 0 || min < 0 || cost < 0) return showToast('Las cantidades y el costo no pueden ser negativos.');
   if ((state.insumos || []).some(i => i.id !== editingInsumoId && i.name.toLowerCase() === name.toLowerCase())) return showToast('Ya existe un insumo con ese nombre.');
@@ -732,8 +756,8 @@ function renderRecipeDraft() {
 }
 function updateRecipeSummary() {
   const el = document.querySelector('#recipeSummary'); if (!el) return;
-  const cost = recipeCost({ receta: recipeDraft }), price = Number(document.querySelector('#productPrice')?.value || 0), profit = price - cost;
-  if (document.querySelector('#productType')?.value === 'preparado') document.querySelector('#productCost').value = cost;
+  const cost = recipeCost({ receta: recipeDraft }), price = moneyInputValue(document.querySelector('#productPrice')?.value), profit = price - cost;
+  if (document.querySelector('#productType')?.value === 'preparado') document.querySelector('#productCost').value = formatMoneyInput(cost);
   el.innerHTML = `<span>Costo por porción <b>${money.format(cost)}</b></span>${price ? `<span>Ganancia <b>${money.format(profit)}</b></span><span>Costo ${Math.round(cost / price * 100)}% del precio</span>` : ''}`;
 }
 function updateRecipeDraft(target) {
@@ -853,7 +877,7 @@ function renderModifierDraft() {
   const insumos = [...(state.insumos || [])].sort((a, b) => a.name.localeCompare(b.name, 'es'));
   document.querySelector('#modifierOptionLines').innerHTML = modifierDraft.options.map((o, i) => {
     const ins = o.insumoId && insumoById(o.insumoId), units = ins ? compatibleUnits(ins.unit) : [];
-    return `<div class="modifier-option-line"><input type="text" maxlength="40" value="${escapeHtml(o.name)}" placeholder="Opción (ej. Término medio)" data-mod-index="${i}" data-mod-field="name" aria-label="Nombre de la opción" /><input type="number" min="0" step="100" inputmode="numeric" value="${Number(o.price) || ''}" placeholder="$0" data-mod-index="${i}" data-mod-field="price" aria-label="Precio adicional" /><select data-mod-index="${i}" data-mod-field="insumoId" aria-label="Insumo que descuenta"><option value="">Sin insumo</option>${insumos.map(x => `<option value="${escapeHtml(x.id)}"${x.id === o.insumoId ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}</select>${ins ? `<input type="number" min="0" step="any" inputmode="decimal" value="${Number(o.qty) || ''}" placeholder="0" data-mod-index="${i}" data-mod-field="qty" aria-label="Cantidad del insumo" /><select data-mod-index="${i}" data-mod-field="unit" aria-label="Unidad">${units.map(u => `<option${u === o.unit ? ' selected' : ''}>${u}</option>`).join('')}</select>` : '<span></span><span></span>'}<button type="button" class="remove-line" data-remove-mod-option="${i}" aria-label="Quitar opción">×</button></div>`;
+    return `<div class="modifier-option-line"><input type="text" maxlength="40" value="${escapeHtml(o.name)}" placeholder="Opción (ej. Término medio)" data-mod-index="${i}" data-mod-field="name" aria-label="Nombre de la opción" /><input type="text" inputmode="numeric" autocomplete="off" data-money value="${formatMoneyInput(Number(o.price) || '')}" placeholder="$0" data-mod-index="${i}" data-mod-field="price" aria-label="Precio adicional" /><select data-mod-index="${i}" data-mod-field="insumoId" aria-label="Insumo que descuenta"><option value="">Sin insumo</option>${insumos.map(x => `<option value="${escapeHtml(x.id)}"${x.id === o.insumoId ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}</select>${ins ? `<input type="number" min="0" step="any" inputmode="decimal" value="${Number(o.qty) || ''}" placeholder="0" data-mod-index="${i}" data-mod-field="qty" aria-label="Cantidad del insumo" /><select data-mod-index="${i}" data-mod-field="unit" aria-label="Unidad">${units.map(u => `<option${u === o.unit ? ' selected' : ''}>${u}</option>`).join('')}</select>` : '<span></span><span></span>'}<button type="button" class="remove-line" data-remove-mod-option="${i}" aria-label="Quitar opción">×</button></div>`;
   }).join('');
   document.querySelector('#modifierGroupProducts').innerHTML = state.products.length ? state.products.map(p => `<label class="check-row modifier-product"><input type="checkbox" data-mod-product="${escapeHtml(p.id)}"${modifierDraft.productIds.includes(p.id) ? ' checked' : ''} /> ${escapeHtml(p.name)} <small class="muted">${escapeHtml(p.category || '')}</small></label>`).join('') : '<p class="muted">Crea productos para asignarles el grupo.</p>';
 }
@@ -864,7 +888,7 @@ function updateModifierDraft(target) {
   const field = target.dataset.modField;
   if (field === 'insumoId') { o.insumoId = target.value || undefined; const ins = o.insumoId && insumoById(o.insumoId); o.unit = ins ? defaultRecipeUnit(ins.unit) : undefined; if (!ins) delete o.qty; return renderModifierDraft(); }
   if (field === 'unit') { o.unit = target.value; return; }
-  o[field] = field === 'name' ? target.value : Number(target.value) || 0;
+  o[field] = field === 'name' ? target.value : field === 'price' ? moneyInputValue(target.value) : Number(target.value) || 0;
 }
 function addModifierOption() { if (modifierDraft) { modifierDraft.options.push({ id: uid('opc'), name: '', price: 0 }); renderModifierDraft(); } }
 function removeModifierOption(index) { if (modifierDraft) { modifierDraft.options.splice(Number(index), 1); renderModifierDraft(); } }
@@ -1811,13 +1835,13 @@ function handleModuleInput(event) {
   const t = event.target;
   if (t.id === 'floorItemName') { const item = updateFloorSelected({ name: t.value }); if (item) { const label = document.querySelector(`[data-floor-item="${CSS.escape(item.id)}"] .floor-name`); if (label) label.textContent = t.value; renderFloorStatus(); } }
   if (t.dataset.invLine !== undefined && invoiceDraft) {
-    const item = invoiceDraft.items[Number(t.dataset.invLine)]; if (!item) return; item[t.dataset.invField] = t.value === '' ? 0 : Number(t.value);
+    const item = invoiceDraft.items[Number(t.dataset.invLine)]; if (!item) return; item[t.dataset.invField] = t.dataset.invField === 'price' ? moneyInputValue(t.value) : (t.value === '' ? 0 : Number(t.value));
     const row = t.closest('.invoice-line'); if (row) row.querySelector('b').textContent = money.format((Number(item.price) || 0) * (Number(item.qty) || 0));
     const original = state.payments.find(p => p.id === invoiceDraft.id), total = draftTotal(), diff = total - (original?.amount || 0);
     renderInvoiceTendersStatus();
     document.querySelector('#invoiceNewTotal').textContent = money.format(total); document.querySelector('#invoiceDiff').textContent = diff === 0 ? 'El total no cambia.' : `Total original ${money.format(original?.amount || 0)} · diferencia ${diff > 0 ? '+' : '−'}${money.format(Math.abs(diff))}`;
   }
-  if (t.dataset.invTender !== undefined && invoiceDraft) { const tender = invoiceDraft.tenders[Number(t.dataset.invTender)]; if (tender && t.dataset.invTenderField === 'amount') { tender.amount = t.value === '' ? 0 : Number(t.value); renderInvoiceTendersStatus(); } }
+  if (t.dataset.invTender !== undefined && invoiceDraft) { const tender = invoiceDraft.tenders[Number(t.dataset.invTender)]; if (tender && t.dataset.invTenderField === 'amount') { tender.amount = moneyInputValue(t.value); renderInvoiceTendersStatus(); } }
   if (t.id === 'wasteQty') updateWasteValue(); if (t.dataset.countItem !== undefined) updateCountTotals();
   if (t.id === 'invoiceSearch') { invoiceFilter.q = t.value; renderInvoices(); }
 }

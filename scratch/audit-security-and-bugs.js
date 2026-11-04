@@ -229,13 +229,13 @@ fin.run(`freshState(); document.querySelector('#expenseCategory').value = 'Otros
 check('Finanzas', 'Media', 'Gasto con valor negativo (-$50.000) es rechazado', fin.get('state.expenses.some(e => e.amount < 0)'), 'se guardó un gasto negativo: altera el efectivo esperado y la utilidad');
 fin.run('freshState(5); openPayment(); document.querySelector("#amountReceived").value = "-1000"; addPaymentTender();');
 check('Finanzas', 'Alta', 'Abono con monto negativo es rechazado', fin.get('currentTenders.some(t => t.amount < 0)'));
-fin.run('confirmPayment(); can = () => true; logAudit = () => {}; openInvoiceEdit(state.payments[0].id); invoiceDraft.items[0].price = -6000; document.querySelector("#invoiceReason").value = "x prueba"; saveInvoiceEdit();');
+fin.run('currentTenders = []; confirmPayment(); can = () => true; logAudit = () => {}; openInvoiceEdit(state.payments[0].id); invoiceDraft.items[0].price = -6000; document.querySelector("#invoiceReason").value = "x prueba"; saveInvoiceEdit();');
 check('Finanzas', 'Alta', 'Corrección de factura con precio negativo es rechazada', fin.get('state.payments[0].amount < 0'));
 const importSrc = read('import-products.js');
 check('Finanzas', 'Baja', 'Importación Excel: rechaza precio $0 y nunca deja existencias negativas (mismas reglas que el formulario manual)',
   !/if \(!\(price > 0\)\)/.test(importSrc) || /adjustNegative/.test(importSrc) || !/Math\.max\(0, Number\(item\.stock\)/.test(importSrc));
-fin.run(`freshState(); document.querySelector('#countedCash').value = '-20000'; confirmClose();`);
-check('Finanzas', 'Baja', 'Cierre de caja con efectivo contado negativo (-$20.000) es rechazado', fin.get('state.cashShift.status') !== 'open', `estado del turno tras el intento: ${fin.get('state.cashShift.status')}`);
+// El campo de dinero solo admite cifras (punto de miles): «-20000» se lee como 20.000, nunca negativo
+check('Finanzas', 'Baja', 'Cierre de caja con efectivo contado negativo (-$20.000) es rechazado', fin.get("moneyInputValue('-20000')") < 0 || !read('app.js').includes("moneyInputValue(document.querySelector('#countedCash').value)"), 'el efectivo contado se puede leer negativo');
 
 // 3.5 Carreras de sincronización: una copia remota desactualizada pisa cambios locales pendientes de subir
 const races = [];
