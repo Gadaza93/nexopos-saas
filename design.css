@@ -171,6 +171,22 @@ html[data-theme="light"] .login-dialog::backdrop { background: radial-gradient(5
 .ticket-head span::first-letter { text-transform: uppercase; }
 .ticket-items > * { border-bottom: 1px dashed var(--line-strong); }
 .ticket-total { border-top: 1px dashed var(--line-strong); }
+/* Clics seguidos en la grilla: sin anclaje de scroll ni recálculos que lleguen desde la cuenta */
+#orderDialog .product-grid { overflow-anchor: none; contain: content; }
+#orderDialog .ticket-panel { contain: layout; }
+#orderDialog .ticket-items { overflow-anchor: none; }
+
+/* Salón: dinero por cobrar en mesas y cuentas abiertas, fijo abajo mientras se recorre la vista */
+.open-money-bar { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 14px; margin-top: 24px; padding: 12px 18px; background: var(--ink); color: var(--on-ink); border: 1px solid var(--accent-line); border-radius: var(--r-md); box-shadow: var(--shadow-sm); }
+.open-money-label { font-size: 13px; font-weight: 700; }
+.open-money-bar small { color: var(--on-ink-2); font-size: 12px; margin-left: auto; }
+.open-money-bar strong { font-family: var(--font-display); font-size: 22px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+@media (max-width: 768px) {
+  .open-money-bar { gap: 4px 10px; flex-wrap: wrap; padding: 10px 14px; margin-top: 18px; }
+  .open-money-label { flex-basis: 100%; font-size: 12px; }
+  .open-money-bar small { margin-left: 0; }
+  .open-money-bar strong { margin-left: auto; font-size: 20px; }
+}
 .product-grid { gap: 14px; } /* la tarjeta .product se define en styles.css */
 .category-tabs button { background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); }
 .category-tabs button.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }

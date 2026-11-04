@@ -1343,6 +1343,7 @@ function mergeRemoteOrders(remoteOrders, { completa = true } = {}) {
     const st = String(lo.status || "").toLowerCase();
     const isPaid = st === "paid" || st === "closed" || st === "cerrada" || st === "cancelada";
     if (isPaid) return true;
+    if (typeof isOrderInEditor === "function" && isOrderInEditor(lo)) return true; // mesa recién abierta en el modal (app.js)
     return Array.isArray(lo.items) && lo.items.length > 0 && lo.items.some(i => (Number(i.qty) || 0) > 0);
   });
 

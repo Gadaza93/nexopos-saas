@@ -406,7 +406,22 @@ function isOrderOpen(order) {
   if (!Array.isArray(order.items) || order.items.length === 0) return false;
   return order.items.some(i => (Number(i.qty) || 0) > 0);
 }
+// Pedido abierto en el modal: aunque siga vacío (mesa o cuenta recién abierta), la limpieza de pedidos vacíos no lo borra.
+// Antes una sincronización o un evento en tiempo real lo quitaba de state.orders con el modal abierto y los clics en el
+// catálogo dejaban de responder hasta cerrar y volver a abrir. Prueba: scratch/test-pedido-modal-y-cobro-parcial.js
+function isOrderInEditor(order) {
+  if (!order || typeof state === 'undefined' || !state || order.id !== state.currentOrderId) return false;
+  const dialog = typeof document !== 'undefined' && typeof document.querySelector === 'function' ? document.querySelector('#orderDialog') : null;
+  return Boolean(dialog?.open);
+}
+globalThis.isOrderInEditor = isOrderInEditor;
 function activeOrders() { return (state.orders || []).filter(isOrderOpen); }
+// Mesas y cuentas abiertas: dinero por cobrar en el local
+function openOrdersSummary() {
+  const orders = activeOrders();
+  return { count: orders.length, total: orders.reduce((sum, o) => sum + orderPending(o), 0) };
+}
+globalThis.openOrdersSummary = openOrdersSummary;
 function activeOrderForTable(tableId) { return (state.orders || []).find(o => o.tableId === tableId && isOrderOpen(o)); }
 function orderTotal(order) {
   if (!order || !Array.isArray(order.items)) return 0;
@@ -459,7 +474,7 @@ function cleanupOrphanOrders() {
     const isPaid = (st === 'paid' || st === 'closed' || st === 'cerrada' || st === 'cancelada');
     if (isPaid) { if (!state.deleted_order_ids?.[order.id]) rememberRemovedOrder(order.id); return false; } // al limpiarlo, queda la tumba
     const hasItems = Array.isArray(order.items) && order.items.length > 0 && order.items.some(i => (Number(i.qty) || 0) > 0);
-    if (!hasItems) return false;
+    if (!hasItems) return isOrderInEditor(order); // la mesa recién abierta en el modal se conserva
     const isKnownTable = validTableIds.has(order.tableId);
     const isKnownCustom = Boolean(order.isCustom) || order.tableId === 'walkin';
     return isKnownTable || isKnownCustom;
@@ -651,6 +666,10 @@ function renderStats() {
   document.querySelector('#activeItems').textContent = `${active.reduce((s,o)=>s+o.items.reduce((n,i)=>n+(Number(i.qty)||0),0),0)} productos en mesas`;
   document.querySelector('#openOrdersCount').textContent = active.length;
   document.querySelector('#cashExpected').textContent = isShiftOpen() ? money.format(expectedCash()) : 'Caja cerrada';
+  // Barra inferior del salón: dinero por cobrar en todas las mesas y cuentas abiertas (se actualiza con cada renderAll)
+  const open = openOrdersSummary(), openTotalEl = document.querySelector('#openMoneyTotal'), openCountEl = document.querySelector('#openMoneyCount');
+  if (openTotalEl) openTotalEl.textContent = money.format(open.total);
+  if (openCountEl) openCountEl.textContent = `${open.count} ${open.count === 1 ? 'cuenta abierta' : 'cuentas abiertas'}`;
 }
 function renderZones() { const zones = ['Todas', ...new Set(state.tables.map(t => t.zone))]; document.querySelector('#zoneFilter').innerHTML = zones.map(z => `<button class="segment ${state.zone === z ? 'active':''}" data-zone="${escapeHtml(z)}">${escapeHtml(z)}</button>`).join(''); }
 function elapsedLabel(ts) { const mins = Math.max(0, Math.floor((Date.now() - (ts || Date.now())) / 60000)); if (mins < 1) return 'Recién abierta'; if (mins < 60) return `Abierta hace ${mins} min`; const h = Math.floor(mins / 60), m = mins % 60; return `Abierta hace ${h} h${m ? ` ${m} min` : ''}`; }
@@ -983,14 +1002,14 @@ function productVisual(product) {
 }
 globalThis.productVisual = productVisual;
 
+// Catálogo y cuenta se dibujan por separado: tocar un producto (o cambiar una cantidad) solo redibuja la cuenta.
+// Redibujar la grilla en cada clic la encogía mientras se decodificaban las fotos y el scroll saltaba al producto vecino.
 function renderOrderDialog() {
-  const order = getOrder(state.currentOrderId);
-  if (!order) return;
-
-  // «Mover / Unir»: solo pedidos de mesa (no barra ni cuentas personalizadas) con productos
-  const moveBtn = document.querySelector('#moveOrderButton');
-  if (moveBtn) { const movable = canMoveOrder(order); moveBtn.disabled = !movable; moveBtn.title = movable ? 'Trasladar a una mesa libre o unir con una ocupada' : (isTableOrder(order) ? 'Agrega productos para poder mover la cuenta' : 'Solo disponible para pedidos de mesa'); }
-
+  if (!getOrder(state.currentOrderId)) return;
+  renderOrderCatalog();
+  renderOrderTicket();
+}
+function renderOrderCatalog() {
   const catTabsEl = document.querySelector('#categoryTabs');
   const prodGridEl = document.querySelector('#productGrid');
   const searchInput = document.querySelector('#productSearch');
@@ -1089,7 +1108,16 @@ function renderOrderDialog() {
       `;
   }
 
-  // 5. Renderizar ticket items
+}
+
+function renderOrderTicket() {
+  const order = getOrder(state.currentOrderId);
+  if (!order) return;
+
+  // «Mover / Unir»: solo pedidos de mesa (no barra ni cuentas personalizadas) con productos
+  const moveBtn = document.querySelector('#moveOrderButton');
+  if (moveBtn) { const movable = canMoveOrder(order); moveBtn.disabled = !movable; moveBtn.title = movable ? 'Trasladar a una mesa libre o unir con una ocupada' : (isTableOrder(order) ? 'Agrega productos para poder mover la cuenta' : 'Solo disponible para pedidos de mesa'); }
+
   const ticketEl = document.querySelector('#ticketItems');
   if (ticketEl) {
     ticketEl.innerHTML = order.items.length
@@ -1140,8 +1168,10 @@ function renderOrderDialog() {
   const twBottom = document.querySelector('#ticketWatermarkBottom');
   if (twTop) twTop.hidden = !isDemo;
   if (twBottom) twBottom.hidden = !isDemo;
+  if (typeof globalThis.updateMobileOrderBar === 'function') globalThis.updateMobileOrderBar();
 }
 globalThis.renderOrderDialog = renderOrderDialog;
+globalThis.renderOrderTicket = renderOrderTicket;
 globalThis.renderPOSProducts = renderOrderDialog;
 globalThis.loadProductsToOrder = renderOrderDialog;
 
@@ -1179,10 +1209,10 @@ function addProduct(productId, modifiers = null) {
   order.updatedAt = Date.now();
   saveState();
   if (globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(() => {});
-  renderOrderDialog();
+  renderOrderTicket();
 }
 globalThis.addProduct = addProduct;
-function changeItem(key, delta) { const order=getOrder(state.currentOrderId); const item=order?.items.find(i=>lineKey(i)===String(key)); if(!item)return; if(Number(delta)<0 && !registerKitchenReduction(order,item,item.qty+Number(delta)))return; item.qty+=Number(delta); if(item.qty<=0)order.items=order.items.filter(i=>i!==item); order.sync_status='pending'; order.updatedAt=Date.now(); saveState(); if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{}); renderOrderDialog(); }
+function changeItem(key, delta) { const order=getOrder(state.currentOrderId); const item=order?.items.find(i=>lineKey(i)===String(key)); if(!item)return; if(Number(delta)<0 && !registerKitchenReduction(order,item,item.qty+Number(delta)))return; item.qty+=Number(delta); if(item.qty<=0)order.items=order.items.filter(i=>i!==item); order.sync_status='pending'; order.updatedAt=Date.now(); saveState(); if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{}); renderOrderTicket(); }
 function saveOrder() { const order=getOrder(state.currentOrderId); if(!order)return; order.note=document.querySelector('#orderNote').value.trim(); order.sync_status='pending'; order.updatedAt=Date.now(); if(order.pendingVoids?.length)sendOrderToKitchen(order,{voidsOnly:true,quiet:true}); if(!order.items.length){state.orders=state.orders.filter(o=>o.id!==order.id);saveState();if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{});document.querySelector('#orderDialog').close();state.currentOrderId=null;renderAll();return showToast('Pedido vacío descartado.');} saveState();if(globalThis.NexoSync?.syncOrders) globalThis.NexoSync.syncOrders().catch(()=>{});document.querySelector('#orderDialog').close();state.currentOrderId=null;renderAll();showToast('Pedido guardado. Queda abierto hasta cobrarlo.'); }
 const PAYMENT_METHODS = ['Efectivo', 'Nequi', 'Daviplata', 'Tarjeta / Datáfono', 'Transferencia'];
 let activePaymentMethod = 'Efectivo';
@@ -1559,7 +1589,9 @@ function confirmPayment() {
   }
   state.payments.push(newPayment);
   saveState();
-  if (globalThis.NexoSync?.deleteActiveOrder) {
+  // Solo una cuenta saldada sale de pedidos_activos. Borrar la fila tras un cobro parcial hacía que el aviso de borrado
+  // (tiempo real) volviera a esta caja y diera la mesa por cobrada, perdiendo los productos que faltaban por pagar.
+  if (order.status === 'paid' && globalThis.NexoSync?.deleteActiveOrder) {
     globalThis.NexoSync.deleteActiveOrder(order.id).catch(() => {});
   }
   if (globalThis.NexoSync?.syncOrders) {
