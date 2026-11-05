@@ -115,7 +115,7 @@
             <select id="productTypeFilter" class="filter-select" aria-label="Tipo de producto"><option value="">Todos los tipos</option><option value="preparado">Preparados (con receta)</option><option value="reventa">Reventa (con stock)</option></select>
             <span class="catalog-count" id="productCount"></span>
           </div>
-          <div class="data-card"><table><thead><tr><th>Producto</th><th>Categoría</th><th>Costo promedio</th><th>Venta</th><th>Ganancia</th><th>Rentabilidad</th><th>Existencias</th><th></th></tr></thead><tbody id="productsTable"></tbody></table></div>
+          <div class="data-card"><table><thead><tr><th>Producto</th><th>Categoría</th><th>Costo promedio</th><th>Venta</th><th>Ganancia</th><th title="Ganancia ÷ costo: cuánto ganas por cada peso invertido">Rentabilidad<br><small>s/ costo</small></th><th title="Ganancia ÷ precio de venta: qué parte de cada venta es ganancia">Rentabilidad neta<br><small>s/ venta</small></th><th>Existencias</th><th></th></tr></thead><tbody id="productsTable"></tbody></table></div>
           <div class="data-card modifiers-card"><div class="card-title-row"><div><h3>Adiciones y modificadores</h3><p class="muted">Grupos de opciones que se eligen al agregar un producto: término de la carne, adiciones con precio, tipo de leche… Una opción puede descontar su insumo.</p></div><button id="newModifierGroupButton" class="primary-button" type="button" data-perm="products">+ Nuevo grupo</button></div><div id="modifierGroupsList" class="modifier-groups-list"></div></div>
         </section>
 

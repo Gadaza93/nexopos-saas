@@ -561,21 +561,21 @@ function renderProducts() {
   renderModifierGroups();
   const tbody = document.querySelector('#productsTable');
   if (!state.products || state.products.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:36px 16px;font-size:14px;">No hay productos registrados. Crea uno nuevo o importa tu archivo Excel.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:36px 16px;font-size:14px;">No hay productos registrados. Crea uno nuevo o importa tu archivo Excel.</td></tr>';
     return;
   }
   const f = catalogFilter.products; f.cat = fillCategoryFilter('#productCategoryFilter', f.cat);
   const typeEl = document.querySelector('#productTypeFilter'); if (typeEl) typeEl.value = f.type;
   const list = state.products.filter(p => (!f.cat || (p.category || 'Sin categoría') === f.cat) && (!f.type || (isPrepared(p) ? 'preparado' : 'reventa') === f.type) && matchesSearch(`${p.name} ${p.category || ''}`, f.q));
   setCatalogCount('#productCount', list.length, state.products.length, 'productos');
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:28px 16px;font-size:14px;">Ningún producto coincide con la búsqueda o el filtro.</td></tr>'; return; }
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:28px 16px;font-size:14px;">Ningún producto coincide con la búsqueda o el filtro.</td></tr>'; return; }
   tbody.innerHTML = list.map(product => {
     const prepared = isPrepared(product), stock = !prepared && state.inventory.find(item => item.id === product.inventoryId);
-    const cost = prepared ? recipeCost(product) : Number(product.cost || 0), profit = Number(product.price || 0) - cost, margin = cost ? profit / cost * 100 : 0;
+    const cost = prepared ? recipeCost(product) : Number(product.cost || 0), profit = Number(product.price || 0) - cost, margin = cost ? profit / cost * 100 : 0, netMargin = Number(product.price || 0) > 0 ? profit / Number(product.price) * 100 : null;
     const last = !prepared && product.lastCost !== undefined && Math.round(product.lastCost) !== Math.round(cost) ? `<br><small class="muted">Última compra ${money.format(product.lastCost)}</small>` : '';
     const portions = prepared ? preparedAvailable(product) : null;
     const existencias = prepared ? `<span class="recipe-tag">Receta · ${recipeLines(product).length} insumo${recipeLines(product).length === 1 ? '' : 's'}</span><br><small class="${portions === 0 ? 'text-danger' : 'muted'}">${portions === null ? 'Sin insumos' : portions === 0 ? 'Faltan insumos' : `Alcanza para ${portions}`}</small>` : stock ? `${formatQty(stock.qty)} ${escapeHtml(stock.unit)}` : '<span class="muted">Sin stock</span>';
-    return `<tr><td><strong>${escapeHtml(product.name)}</strong></td><td>${escapeHtml(product.category || 'Sin categoría')}</td><td>${money.format(cost)}${prepared ? '<br><small class="muted">Según receta</small>' : ''}${last}</td><td><strong>${money.format(product.price)}</strong></td><td><strong>${money.format(profit)}</strong></td><td>${cost ? `${margin.toFixed(1)}%` : '<span class="muted">—</span>'}</td><td>${existencias}</td><td><div class="product-actions"><button class="mini-action" data-edit-product="${product.id}">Editar</button><button class="mini-action delete-action" data-delete-product="${product.id}">Eliminar</button></div></td></tr>`;
+    return `<tr><td><strong>${escapeHtml(product.name)}</strong></td><td>${escapeHtml(product.category || 'Sin categoría')}</td><td>${money.format(cost)}${prepared ? '<br><small class="muted">Según receta</small>' : ''}${last}</td><td><strong>${money.format(product.price)}</strong></td><td><strong>${money.format(profit)}</strong></td><td>${cost ? `${margin.toFixed(1)}%` : '<span class="muted">—</span>'}</td><td><strong>${netMargin === null ? '<span class="muted">—</span>' : `${netMargin.toFixed(1)}%`}</strong></td><td>${existencias}</td><td><div class="product-actions"><button class="mini-action" data-edit-product="${product.id}">Editar</button><button class="mini-action delete-action" data-delete-product="${product.id}">Eliminar</button></div></td></tr>`;
   }).join('');
 }
 globalThis.renderProducts = renderProducts;

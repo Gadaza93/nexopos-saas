@@ -1,4 +1,4 @@
-const CACHE = 'nexopos-v56';
+const CACHE = 'nexopos-v57';
 const ASSETS = [
   './', // la app se abre por la raíz: en Cloudflare /index.html redirige a / (no se cachea una redirección)
   './theme.css',
