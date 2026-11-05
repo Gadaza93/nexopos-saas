@@ -2474,6 +2474,24 @@ document.addEventListener('change', e => { if (e.target.id === 'printPaperWidth'
 document.querySelector('#productImage').addEventListener('change', event => { const file = event.target.files[0]; readLocalImage(file, image => { pendingProductImage = image; setImagePreview(document.querySelector('#productImagePreview'), image, '🍾'); }); });
 document.querySelector('#businessImage').addEventListener('change', event => { const file = event.target.files[0]; readLocalImage(file, image => { pendingBusinessImage = image; setImagePreview(document.querySelector('#profileImagePreview'), image, document.querySelector('#businessName').value || 'N'); }); });
 if ('serviceWorker' in navigator && !window.desktop) window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').then(reg => reg.update().catch(() => {})).catch(() => { }));
+/* ---------- Instalar como aplicación (PWA) ----------
+   Chrome y Edge ofrecen instalar la web (manifest.webmanifest con íconos + service worker): se abre en su propia
+   ventana, sin barra de direcciones, con ícono en el escritorio y la barra de tareas. No es un .exe: sigue siendo
+   la web y se actualiza sola. El botón solo aparece cuando el navegador lo permite (beforeinstallprompt), nunca
+   en Windows (Electron), en modo demo ni si ya se abrió instalada. */
+let installPromptEvent = null;
+function isInstalledApp() { try { return !!(globalThis.matchMedia?.('(display-mode: standalone)').matches || globalThis.matchMedia?.('(display-mode: window-controls-overlay)').matches || navigator.standalone); } catch (e) { return false; } }
+function refreshInstallButton() { const btn = document.querySelector('#installAppButton'); if (btn) btn.hidden = !installPromptEvent || isInstalledApp() || !!window.desktop || isDemoMode(); }
+async function installApp() {
+  if (!installPromptEvent) return showToast('Tu navegador no permite instalarla desde aquí: usa el menú ⋮ → «Instalar NexoPos» (Chrome o Edge).');
+  const ev = installPromptEvent; installPromptEvent = null; refreshInstallButton();
+  try { ev.prompt(); const { outcome } = await ev.userChoice; if (outcome !== 'accepted') { installPromptEvent = null; } } catch (e) { /* el navegador canceló el aviso */ }
+}
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPromptEvent = e; refreshInstallButton(); });
+  window.addEventListener('appinstalled', () => { installPromptEvent = null; refreshInstallButton(); showToast('NexoPos quedó instalada: ábrela desde el ícono del escritorio o del menú Inicio.'); });
+}
+document.querySelector('#installAppButton')?.addEventListener('click', installApp);
 /* ---------- Activación de terminal (SaaS multinegocio) ----------
    Cada caja queda vinculada a un negocio (state.terminal.businessId, que también fija profile.syncId).
    Viaja con el estado: IndexedDB, archivo espejo y respaldos. El Modo Demo nunca se vincula. */
