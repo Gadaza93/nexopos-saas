@@ -699,7 +699,17 @@ function renderInventory() {
     document.querySelector('#inventoryTable').innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;padding:32px 16px;font-size:14px;">No hay productos ni existencias registradas.</td></tr>';
     return;
   }
-  document.querySelector('#inventoryTable').innerHTML = state.inventory.map(item => {
+  // Buscador y filtros (catalogFilter, modules.js): la categoría sale del producto que usa cada existencia.
+  // Sin modules.js (algunas pruebas cargan solo app.js) no hay filtros: se muestra todo
+  const filtros = typeof catalogFilter !== 'undefined', f = filtros ? catalogFilter.inventory : { q: '', cat: '', status: '' };
+  const matchesSearch = filtros ? globalThis.matchesSearch || (() => true) : () => true;
+  if (filtros) { f.cat = fillCategoryFilter('#inventoryCategoryFilter', f.cat); const statusEl = document.querySelector('#inventoryStatusFilter'); if (statusEl) statusEl.value = f.status; }
+  const catOf = id => (state.products.find(p => p.inventoryId === id)?.category) || 'Sin categoría';
+  const statusOf = item => item.qty <= 0 ? 'out' : item.qty <= item.min ? 'low' : 'good';
+  const list = state.inventory.filter(item => (!f.cat || catOf(item.id) === f.cat) && (!f.status || statusOf(item) === f.status) && matchesSearch(`${item.name} ${catOf(item.id)}`, f.q));
+  if (filtros) setCatalogCount('#inventoryCount', list.length, state.inventory.length, 'productos');
+  if (!list.length) { document.querySelector('#inventoryTable').innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;padding:28px 16px;font-size:14px;">Ningún producto coincide con la búsqueda o el filtro.</td></tr>'; return; }
+  document.querySelector('#inventoryTable').innerHTML = list.map(item => {
     let badge = '';
     if (item.qty <= 0) {
       badge = '<span class="status status-out">Agotado</span>';

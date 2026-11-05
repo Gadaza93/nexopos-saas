@@ -1727,3 +1727,9 @@ html.is-booting body::after { content: ''; position: fixed; top: 50%; left: 50%;
   .obsidian-wa-btn { padding: 12px 16px !important; }
   .obsidian-close-btn { padding: 9px !important; }
 }
+
+/* Buscador y filtros de Productos e Inventario: quedan visibles al bajar por la lista */
+.catalog-filters { position: sticky; top: 0; z-index: 4; background: var(--bg); padding: 10px 0; margin: 0 0 6px; align-items: center; }
+.catalog-filters .filter-search { flex: 1; max-width: 420px; }
+.catalog-count { color: var(--muted); font-size: 13px; margin-left: auto; white-space: nowrap; }
+@media (max-width: 768px) { .catalog-filters .filter-search { min-width: 0; width: 100%; max-width: none; flex-basis: 100%; } .catalog-count { margin-left: 0; } }
