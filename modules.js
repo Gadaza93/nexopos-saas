@@ -1866,7 +1866,7 @@ function handleModuleInput(event) {
   if (t.dataset.invTender !== undefined && invoiceDraft) { const tender = invoiceDraft.tenders[Number(t.dataset.invTender)]; if (tender && t.dataset.invTenderField === 'amount') { tender.amount = moneyInputValue(t.value); renderInvoiceTendersStatus(); } }
   if (t.id === 'wasteQty') updateWasteValue(); if (t.dataset.countItem !== undefined) updateCountTotals();
   if (t.id === 'invoiceSearch') { invoiceFilter.q = t.value; renderInvoices(); }
-  if (t.id === 'productSearch') { catalogFilter.products.q = t.value; renderProducts(); }
+  if (t.id === 'catalogSearch') { catalogFilter.products.q = t.value; renderProducts(); }
   if (t.id === 'inventorySearch') { catalogFilter.inventory.q = t.value; renderInventory(); }
 }
 function handleModuleChange(event) {
