@@ -10,6 +10,7 @@
 // 7. Producto nuevo con una venta antes de subirlo: stock absoluto una sola vez, sin doble descuento.
 // 8. Vender de más deja stock negativo igual en la caja y en la nube (sin ajustes fantasma).
 // 9. Sin la tabla (SQL sin aplicar): modo anterior, stock absoluto y ningún movimiento.
+// 11. Forzar la re-sincronización desde un equipo nuevo no devuelve lo vendido.
 
 const assert = require('assert');
 const { createMockSupabase } = require('./mock-supabase.js');
@@ -176,6 +177,26 @@ const nubeStock = (sb, id) => sb.__tables.productos.find(p => p.id === id).stock
   await A.subir(); await B.subir();
   assert.strictEqual(nubeStock(sb, 'nachos'), -2, 'sin ajustes fantasma');
   ok('vender de más entre dos cajas deja −2 en la nube y en las cajas (se ve el faltante, sin ajustes fantasma)');
+
+  // 11. Re-sincronización forzada (tocar el indicador «En línea / Sincronizado») en un equipo recién vinculado: antes
+  // marcaba todas las ventas como pendientes y la fórmula del stock devolvía a la nube todo lo vendido
+  // (NexoBar, 07-11-2026, celular: +774 Águila light). Ahora solo sube lo que la nube no tiene y el stock no se mueve.
+  A.vender('ron', 4); await A.subir();
+  const D = nuevaCaja('D', sb);
+  await D.descargar();
+  const stockNube = nubeStock(sb, 'ron'), movsAntes = (sb.__tables.movimientos_stock || []).length;
+  global.state = D.st; global.supabase = { createClient: () => sb };
+  D.st.payments.push(...structuredClone(A.st.payments.filter(p => !D.st.payments.some(x => x.id === p.id))).map(p => ({ ...p, sync_status: 'synced' })));
+  await D.sync.forceSyncAll();
+  assert.strictEqual(nubeStock(sb, 'ron'), stockNube, `nube tras forzar: ${nubeStock(sb, 'ron')} (antes ${stockNube})`);
+  assert.strictEqual((sb.__tables.movimientos_stock || []).length, movsAntes, 'forzar no crea movimientos');
+  assert.strictEqual(D.stock('ron'), stockNube, 'el equipo queda igual a la nube');
+  // Una venta local que de verdad no está en la nube sí se sube y descuenta una sola vez
+  global.state = D.st;
+  const local = D.vender('ron', 1); local.sync_status = 'synced'; // como si se hubiera perdido el estado de subida
+  await D.sync.forceSyncAll(); await A.descargar(); await D.descargar(); await D.subir();
+  assert.strictEqual(nubeStock(sb, 'ron'), stockNube - 1, `la venta faltante descuenta una vez: ${nubeStock(sb, 'ron')}`);
+  ok('forzar la re-sincronización desde otro equipo no devuelve lo vendido: solo sube las ventas que faltan');
 
   // 9. Sin la tabla: modo anterior
   const viejo = createMockSupabase({ businessId: BID, seed: { negocios: [{ id: BID, nombre: 'Bar', configuracion: {}, activo: true }], productos: [producto('cerveza', 10)] } });

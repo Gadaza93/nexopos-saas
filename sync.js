@@ -79,6 +79,18 @@ function toValidUuid(str) {
   return (p1 + "-" + p2 + "-" + p3 + "-" + p4 + "-" + p5).toLowerCase();
 }
 
+// Día local (AAAA-MM-DD, hora del equipo = Colombia) de una marca de tiempo de la nube. Las columnas fecha de ventas,
+// mermas y turnos son timestamptz en UTC: cortar el texto (slice(0, 10)) da el día UTC, que desde las 7 p. m. ya es
+// mañana y pasaba las ventas de la noche al día siguiente en los equipos que las descargan. Gastos no: su fecha es solo
+// el día (medianoche UTC), y ese sí se lee con slice.
+function fechaLocalDe(valor) {
+  const d = new Date(valor);
+  if (valor === null || valor === undefined || valor === "" || Number.isNaN(d.getTime())) return typeof today === "function" ? today() : new Date().toISOString().slice(0, 10);
+  // Medianoche UTC exacta = registro que solo tenía el día (versiones viejas sin hora de pago): ese día tal cual
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0) return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // 1. Helper de fechas ISO 8601
 function toIsoDate(val) {
   if (val === null || val === undefined || val === "") {
@@ -442,7 +454,8 @@ function pendingSoldByProduct() {
 const productById = id => ((typeof state !== "undefined" && state?.products) || []).find(p => String(p.id) === String(id));
 // La venta llegó a la nube: su trigger ya descontó, así que la base del producto baja lo mismo
 function markSaleUploaded(sale) {
-  if (stockMode === true) {
+  // Solo una venta que estaba pendiente baja la base: re-subir una que la nube ya tenía no descuenta nada allá
+  if (stockMode === true && isPendingSync(sale)) {
     Object.entries(saleStockEffect(sale)).forEach(([id, q]) => {
       const p = productById(id);
       if (p && Number.isFinite(p.stockSynced)) p.stockSynced = roundQty(p.stockSynced - q);
@@ -1700,7 +1713,7 @@ async function syncSales(options = {}) {
 
     // 2. Tomar únicamente ventas locales marcadas como nuevo_local o pending
     const rawSales = (typeof state !== "undefined" && Array.isArray(state.payments)) ? state.payments : [];
-    const sales = rawSales.filter(p => options.force || isPendingSync(p));
+    const sales = rawSales.filter(p => (options.force && !options.ventasSoloPendientes) || isPendingSync(p));
 
     if (sales.length > 0) {
       console.log(`[NexoSync] 📤 Subiendo ${sales.length} ventas locales hacia Supabase...`);
@@ -2084,7 +2097,7 @@ async function pullAllFromSupabase(businessId) {
                 status: "open",
                 openingCash: Number(latestShift.monto_apertura ?? latestShift.opening_cash ?? 0),
                 openedAt: shiftOpenedAt,
-                date: (latestShift.fecha_apertura || latestShift.created_at || new Date().toISOString()).slice(0, 10)
+                date: fechaLocalDe(latestShift.fecha_apertura || latestShift.created_at || Date.now())
               };
             }
           } else {
@@ -2253,8 +2266,15 @@ async function pullAllFromSupabase(businessId) {
             if (existingSale) {
               existingSale.sync_status = "synced";
               existingSale.synced = true;
+              // Ventas bajadas antes con el día UTC: se pasan a su día local (el historial del mes viejo y del nuevo se reescribe)
+              const diaLocal = v.fecha ? fechaLocalDe(v.fecha) : "";
+              if (diaLocal && existingSale.date !== diaLocal) {
+                if (typeof marcarHistorialModificado === "function") marcarHistorialModificado("payments", existingSale);
+                existingSale.date = diaLocal;
+                if (typeof marcarHistorialModificado === "function") marcarHistorialModificado("payments", existingSale);
+              }
             } else {
-              const parsedDate = v.fecha ? String(v.fecha).slice(0, 10) : (typeof today === "function" ? today() : new Date().toISOString().slice(0, 10));
+              const parsedDate = v.fecha ? fechaLocalDe(v.fecha) : (typeof today === "function" ? today() : new Date().toISOString().slice(0, 10));
               state.payments.push({
                 id: String(v.id),
                 orderId: String(v.order_id || v.id),
@@ -2277,6 +2297,16 @@ async function pullAllFromSupabase(businessId) {
             }
           });
           results.ventas = salesData.length; // filas nuevas descargadas (las ya conocidas solo viajan como id)
+          // Ventas ya bajadas por versiones anteriores con el día UTC (las ya conocidas no vuelven a llegar completas):
+          // su día es el día local de su hora de pago. En la caja que las cobró ya coinciden, así que no cambia nada.
+          state.payments.forEach(p => {
+            if (isPendingSync(p) || !Number.isFinite(Number(p.paidAt)) || !p.date) return;
+            const diaLocal = fechaLocalDe(Number(p.paidAt));
+            if (diaLocal === p.date) return;
+            if (typeof marcarHistorialModificado === "function") marcarHistorialModificado("payments", p);
+            p.date = diaLocal;
+            if (typeof marcarHistorialModificado === "function") marcarHistorialModificado("payments", p);
+          });
         }
       }
     } catch (e) {
@@ -2394,7 +2424,7 @@ async function pullAllFromSupabase(businessId) {
           mermaData.forEach(m => {
             if (!stockLogIds.has(String(m.id))) {
               stockLogIds.add(String(m.id));
-              const parsedDate = m.fecha ? String(m.fecha).slice(0, 10) : (typeof today === "function" ? today() : new Date().toISOString().slice(0, 10));
+              const parsedDate = m.fecha ? fechaLocalDe(m.fecha) : (typeof today === "function" ? today() : new Date().toISOString().slice(0, 10));
               state.stockLog.push({
                 id: String(m.id),
                 at: new Date(m.fecha || m.created_at || Date.now()).getTime(),
@@ -2478,7 +2508,7 @@ function setupRealtime() {
                 shiftId: sale.shift_id,
                 paidAt: new Date(sale.created_at || Date.now()).getTime(),
                 createdAt: new Date(sale.created_at || Date.now()).getTime(),
-                date: sale.fecha ? String(sale.fecha).slice(0, 10) : new Date().toISOString().slice(0, 10),
+                date: sale.fecha ? fechaLocalDe(sale.fecha) : fechaLocalDe(Date.now()),
                 sync_status: "synced"
               });
 
@@ -2653,7 +2683,7 @@ function setupRealtime() {
               openingCash: Number(row.monto_apertura ?? row.opening_cash ?? 0),
               openedAt: new Date(row.fecha_apertura || row.created_at || Date.now()).getTime(),
               closedAt: row.fecha_cierre ? new Date(row.fecha_cierre).getTime() : null,
-              date: (row.fecha_apertura || row.created_at || new Date().toISOString()).slice(0, 10)
+              date: fechaLocalDe(row.fecha_apertura || row.created_at || Date.now())
             };
           }
           if (typeof scheduleSave === "function") scheduleSave();
@@ -2682,13 +2712,20 @@ async function forceSyncAll() {
     return { ok: false, error: "Sin conexión" };
   }
 
-  // 1. Marcar registros locales para forzar revisión y subida
+  // 1. Marcar registros locales para forzar revisión y subida.
+  // Ventas: SOLO las que la nube no tiene (se comparan ids). Marcar todas como pendientes hacía que la fórmula del
+  // stock (recordStockMovements: + lo vendido en ventas sin subir) devolviera a la nube todo lo vendido en la historia
+  // del negocio (NexoBar, 07-11-2026: +1.403 unidades en 43 productos al tocar el indicador desde un celular). Si la
+  // lista de ids no llega completa no se marca ninguna: las pendientes de verdad ya están marcadas y se suben igual.
+  // Productos: no se marcan (su stock viaja por movimientos y se pisarían cambios de otras cajas).
   if (typeof state !== "undefined" && state) {
-    if (Array.isArray(state.payments)) {
-      state.payments.forEach(p => { p.sync_status = "pending"; p.synced = false; });
-    }
-    if (Array.isArray(state.products)) {
-      state.products.forEach(p => { p.sync_status = "pending"; p.synced = false; });
+    if (Array.isArray(state.payments) && state.payments.length) {
+      const sbIds = getClient(), bIdIds = getBusinessId() || DEFAULT_BUSINESS_ID;
+      const manifest = sbIds ? await fetchAllRows(sbIds, "ventas", bIdIds, "id") : { complete: false };
+      if (manifest.complete) {
+        const enNube = new Set(manifest.rows.map(r => String(r.id)));
+        state.payments.forEach(p => { if (!enNube.has(String(p.id)) && !isPendingSync(p)) { p.sync_status = "pending"; p.synced = false; } });
+      }
     }
     if (Array.isArray(state.expenses)) {
       state.expenses.forEach(e => { e.sync_status = "pending"; e.synced = false; });
@@ -2698,8 +2735,9 @@ async function forceSyncAll() {
     }
   }
 
-  // 2. Subida forzada completa (Push): syncAll({ force: true }) contrasta IDs y sube todas las ventas pendientes
-  const pushRes = await syncAll({ force: true });
+  // 2. Subida forzada (Push): gastos, compras, proveedores y mermas completos; ventas solo las pendientes (paso 1).
+  // Volver a subir una venta que la nube ya tiene bajaba la base de stock del producto como si fuera nueva.
+  const pushRes = await syncAll({ force: true, ventasSoloPendientes: true });
 
   // 3. Sincronizar inmediatamente el estado actual de la caja
   if (typeof state !== "undefined" && state?.cashShift) {
@@ -2893,6 +2931,7 @@ rootScope.NexoSync = {
   syncProductos,
   pullAllFromSupabase,
   forceSyncAll,
+  fechaLocalDe,
   triggerBidirectionalSync,
   scheduleSync,
   checkInitialConnection,
