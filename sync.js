@@ -46,7 +46,14 @@ function isPendingSync(item) {
 // Modo Demo Local (Sandbox): isDemoMode() vive en demo-mode.js; en Node (pruebas) se carga aquí.
 if (typeof module !== "undefined" && typeof globalThis.isDemoMode !== "function") require("./demo-mode.js");
 
+// Pantalla de PIN abierta: tapa toda la app con fondo sólido. Redibujar todo detrás (cada descarga y cada aviso en
+// tiempo real) trababa el teclado del PIN en celulares; al entrar, completeLogin (modules.js) dibuja todo.
+function loginAbierto() {
+  try { return !!(typeof document !== "undefined" && document.querySelector && document.querySelector("#loginDialog")?.open); } catch (e) { return false; }
+}
+
 const syncState = {
+  lastPullAt: 0, // última descarga completa correcta: evita repetirla al arrancar justo después de vincular
   status: "offline",
   online: (typeof navigator !== "undefined" && navigator.onLine === false) ? false : true,
   lastSyncAt: null,
@@ -1481,7 +1488,7 @@ function refrescarPedidos() {
   if (typeof renderTables === "function") try { renderTables(); } catch (e) { /* ignore */ }
   if (typeof renderStats === "function") try { renderStats(); } catch (e) { /* ignore */ }
   if (typeof renderCustomOrders === "function") try { renderCustomOrders(); } catch (e) { /* ignore */ }
-  if (typeof renderAll === "function") try { renderAll(); } catch (e) { /* ignore */ }
+  if (typeof renderAll === "function") try { loginAbierto() || renderAll(); } catch (e) { /* ignore */ }
 }
 function aplicarPedidoEnVivo(payload) {
   if (!payload?.new) return;
@@ -2460,17 +2467,20 @@ async function pullAllFromSupabase(businessId) {
     const totalCount = results.negocios + results.productos + results.ventas + results.gastos + results.proveedores + results.mermas + (results.pedidos || 0);
     console.log(`[NexoSync] 📥 Descarga completada: ${totalCount} registros procesados.`, results);
 
-    if (typeof renderShiftStatus === "function") {
-      try { renderShiftStatus(); } catch (e) { /* ignore */ }
-    }
-    if (typeof renderTables === "function") {
-      try { renderTables(); } catch (e) { /* ignore */ }
-    }
-    if (typeof renderStats === "function") {
-      try { renderStats(); } catch (e) { /* ignore */ }
+    syncState.lastPullAt = Date.now();
+    if (!loginAbierto()) {
+      if (typeof renderShiftStatus === "function") {
+        try { renderShiftStatus(); } catch (e) { /* ignore */ }
+      }
+      if (typeof renderTables === "function") {
+        try { renderTables(); } catch (e) { /* ignore */ }
+      }
+      if (typeof renderStats === "function") {
+        try { renderStats(); } catch (e) { /* ignore */ }
+      }
     }
     if (typeof renderAll === "function") {
-      try { renderAll(); } catch (e) { /* ignore */ }
+      try { loginAbierto() || renderAll(); } catch (e) { /* ignore */ }
     }
 
     return { ok: true, count: totalCount, details: results };
@@ -2516,7 +2526,7 @@ function setupRealtime() {
               // de productos (descontar también aquí lo restaba dos veces si ese evento llegaba primero)
 
               if (typeof scheduleSave === "function") scheduleSave();
-              if (typeof renderAll === "function") renderAll();
+              if (typeof renderAll === "function") loginAbierto() || renderAll();
               if (typeof showToast === "function") {
                 const moneyFmt = typeof money !== "undefined" ? money.format(sale.total) : `$${sale.total}`;
                 showToast(`🔔 Venta registrada en vivo: ${moneyFmt}`);
@@ -2530,7 +2540,7 @@ function setupRealtime() {
         aplicarInsumoRemoto(payload.new);
         if (typeof refreshPreparedCosts === "function") refreshPreparedCosts();
         if (typeof scheduleSave === "function") scheduleSave();
-        if (typeof renderAll === "function") renderAll();
+        if (typeof renderAll === "function") loginAbierto() || renderAll();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "productos", filter: `business_id=eq.${bId}` }, payload => {
         if (payload?.new) {
@@ -2590,13 +2600,13 @@ function setupRealtime() {
             }
 
             if (typeof scheduleSave === "function") scheduleSave();
-            if (typeof renderAll === "function") renderAll();
+            if (typeof renderAll === "function") loginAbierto() || renderAll();
           }
         } else if (payload?.eventType === "DELETE" && payload?.old?.id) {
           if (typeof state !== "undefined" && Array.isArray(state.products)) {
             state.products = state.products.filter(x => x.id !== payload.old.id);
             if (typeof scheduleSave === "function") scheduleSave();
-            if (typeof renderAll === "function") renderAll();
+            if (typeof renderAll === "function") loginAbierto() || renderAll();
           }
         } else {
           pullAllFromSupabase();
@@ -2628,7 +2638,7 @@ function setupRealtime() {
                 try { renderStats(); } catch (e) { /* ignore */ }
               }
               if (typeof renderAll === "function") {
-                try { renderAll(); } catch (e) { /* ignore */ }
+                try { loginAbierto() || renderAll(); } catch (e) { /* ignore */ }
               }
               if (typeof scheduleSave === "function") scheduleSave();
               if (typeof showToast === "function") {
@@ -2642,7 +2652,7 @@ function setupRealtime() {
               try {
                 if (applyRemoteFloorPlan(row.configuracion.floorPlan)) {
                   if (typeof scheduleSave === "function") scheduleSave();
-                  if (typeof renderAll === "function") renderAll();
+                  if (typeof renderAll === "function") loginAbierto() || renderAll();
                 }
               } catch (e) { /* ignore */ }
             }
@@ -2654,7 +2664,7 @@ function setupRealtime() {
               if (typeof scheduleSave === "function") scheduleSave();
               if (typeof renderTables === "function") try { renderTables(); } catch (e) {}
               if (typeof renderStats === "function") try { renderStats(); } catch (e) {}
-              if (typeof renderAll === "function") try { renderAll(); } catch (e) {}
+              if (typeof renderAll === "function") try { loginAbierto() || renderAll(); } catch (e) {}
             }
           }
         }
@@ -2689,7 +2699,7 @@ function setupRealtime() {
           if (typeof scheduleSave === "function") scheduleSave();
           if (typeof renderShiftStatus === "function") renderShiftStatus();
           if (typeof renderStats === "function") renderStats();
-          if (typeof renderAll === "function") renderAll();
+          if (typeof renderAll === "function") loginAbierto() || renderAll();
         }
       })
       .subscribe();
@@ -2885,7 +2895,8 @@ function init() {
       if (countPendingRecords() > 0) {
         await syncAll();
       }
-      await pullAllFromSupabase();
+      // Recién vinculada (Vincular Terminal ya descargó todo hace segundos): no se repite la descarga completa
+      if (Date.now() - (syncState.lastPullAt || 0) > 60000) await pullAllFromSupabase();
       setupRealtime();
     }
   }, 300);

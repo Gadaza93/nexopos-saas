@@ -1733,3 +1733,7 @@ html.is-booting body::after { content: ''; position: fixed; top: 50%; left: 50%;
 .catalog-filters .filter-search { flex: 1; max-width: 420px; }
 .catalog-count { color: var(--muted); font-size: 13px; margin-left: auto; white-space: nowrap; }
 @media (max-width: 768px) { .catalog-filters .filter-search { min-width: 0; width: 100%; max-width: none; flex-basis: 100%; } .catalog-count { margin-left: 0; } }
+
+/* Toques en celulares: sin la espera ni el zoom del «doble toque» de Safari en iPhone (en el teclado del PIN, dos
+   toques seguidos se tomaban como zoom y la pantalla se sentía lenta y trabada) */
+button, a, [role="button"], select, label { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
