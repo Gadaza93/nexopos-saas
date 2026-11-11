@@ -2,7 +2,7 @@
 // Funciones por plan (planes.js) con el código REAL de app.js, modules.js y sync.js:
 // 1. El plan sale de state.subscription.plan (negocios.plan); sin plan conocido o en demo rige el Pro.
 // 2. Plan Básico: máximo 10 mesas o barras (agregar y guardar), sin plano interactivo ni arrastre en el diseñador.
-// 3. Plan Básico: sin utilidad neta, valoración de inventario, exportaciones ni gastos; un solo usuario administrador.
+// 3. Plan Básico: sin utilidad neta, valoración de inventario, exportaciones ni gastos; 2 usuarios (administrador y uno más).
 // 4. Un negocio que baja de plan conserva sus mesas y usuarios, pero no suma otros; el cambio llega por sincronización.
 // 5. Panel superadmin: el botón de plan envía p_plan a admin_update_negocio_status.
 
@@ -119,22 +119,35 @@ assert.match(fs.readFileSync(path.join(ROOT, 'modules.js'), 'utf8'), /\['openExp
 assert.match(fs.readFileSync(path.join(ROOT, 'modules.js'), 'utf8'), /^\s*guard\('deleteCurrentOrder', 'cancelOrder'\);/m, 'el permiso de anular pedidos sigue activo');
 ok('Plan Básico: sin utilidad neta, valoración, exportaciones a Excel/PDF ni registro de gastos (abre el modal); Pro sí');
 
-// --- 5. Un solo usuario administrador ---
+// --- 5. Plan Básico: 2 usuarios (el administrador y un cajero o mesero) ---
+const nuevoUsuario = (nombre, rol, pin) => run(`openUserDialog(); editingUserId = null; document.querySelector('#userName').value = ${JSON.stringify(nombre)}; document.querySelector('#userRole').value = ${JSON.stringify(rol)}; document.querySelector('#userPin').value = ${JSON.stringify(pin)}; document.querySelector('#userActive').checked = true; saveUser();`);
 run('fresh("basico");');
-run('openUserDialog();'); assert.ok(modalAbierto(), 'no se crea un segundo usuario'); cerrarModal();
-run(`editingUserId = null; document.querySelector('#userName').value = 'Pedro'; document.querySelector('#userRole').value = 'cajero'; document.querySelector('#userPin').value = '1111'; document.querySelector('#userActive').checked = true; saveUser();`);
-assert.strictEqual(get('state.users.length'), 1, 'saveUser también valida (sin pasar por el botón)');
-const adminId = get('state.users[0].id');
+assert.strictEqual(get('PLAN_MAX_USUARIOS'), 2);
+run('openUserDialog();'); assert.ok(!modalAbierto(), 'el segundo usuario sí se puede crear'); run(`document.querySelector('#userDialog').open = false`);
+nuevoUsuario('Pedro', 'cajero', '1111');
+assert.strictEqual(get('state.users.length'), 2, 'el Básico admite un cajero además del administrador');
+run('openUserDialog();'); assert.ok(modalAbierto(), 'no se crea un tercer usuario'); cerrarModal();
+run(`editingUserId = null; document.querySelector('#userName').value = 'Ana'; document.querySelector('#userRole').value = 'mesero'; document.querySelector('#userPin').value = '3333'; document.querySelector('#userActive').checked = true; saveUser();`);
+assert.strictEqual(get('state.users.length'), 2, 'saveUser también valida el límite (sin pasar por el botón)');
+cerrarModal();
+const adminId = get('state.users.find(u => u.role === "admin").id');
 run(`openUserDialog(${JSON.stringify(adminId)}); document.querySelector('#userName').value = 'Dueño'; document.querySelector('#userRole').value = 'admin'; document.querySelector('#userPin').value = ''; document.querySelector('#userActive').checked = true; saveUser();`);
-assert.strictEqual(get('state.users[0].name'), 'Dueño', 'el administrador sí se edita');
-// Negocio que bajó de plan con un cajero: no entra, se le muestra el candado; el admin sí
-run(`fresh("pro"); const caj = newUser('Caja 1', 'cajero', '2222'); state.users.push(caj); state.subscription.plan = 'basico'; loginTarget = caj.id; loginPin = '2222'; session = null; attemptLogin();`);
-assert.strictEqual(run('session'), null, 'el cajero no inicia sesión en el Plan Básico');
-assert.ok(modalAbierto());
-run(`renderLogin();`); assert.match(run(`document.querySelector('#loginUsers').innerHTML`), /login-user plan-locked[^>]*>.*Caja 1.*PRO/, 'el cajero aparece con candado PRO');
-run(`state.subscription.plan = 'pro'; loginTarget = state.users.find(u => u.name === 'Caja 1').id; loginPin = '2222'; attemptLogin();`);
-assert.strictEqual(get('me()?.name'), 'Caja 1', 'con Pro entra');
-ok('Plan Básico: un solo usuario administrador (crear, asignar rol e iniciar sesión se bloquean); Pro con roles');
+assert.strictEqual(get('state.users.find(u => u.role === "admin").name'), 'Dueño', 'el administrador sí se edita');
+// El cajero del Básico inicia sesión
+run(`loginTarget = state.users.find(u => u.name === 'Pedro').id; loginPin = '1111'; session = null; attemptLogin();`);
+assert.strictEqual(get('me()?.name'), 'Pedro', 'el cajero del Básico entra con su PIN');
+// Negocio que bajó de plan con dos cajeros: entra el primero; el segundo queda con candado; con Pro entran todos
+run(`fresh("pro"); state.users.push(newUser('Caja 1', 'cajero', '2222')); state.users.push(newUser('Caja 2', 'mesero', '4444')); state.subscription.plan = 'basico';`);
+run(`loginTarget = state.users.find(u => u.name === 'Caja 1').id; loginPin = '2222'; session = null; attemptLogin();`);
+assert.strictEqual(get('me()?.name'), 'Caja 1', 'el primer usuario que cabe entra');
+run(`loginTarget = state.users.find(u => u.name === 'Caja 2').id; loginPin = '4444'; session = null; attemptLogin();`);
+assert.strictEqual(run('session'), null, 'el usuario que no cabe no inicia sesión en el Plan Básico');
+assert.ok(modalAbierto()); cerrarModal();
+run(`renderLogin();`); assert.match(run(`document.querySelector('#loginUsers').innerHTML`), /login-user plan-locked[^>]*>.*Caja 2.*PRO/, 'el usuario que no cabe aparece con candado PRO');
+assert.doesNotMatch(run(`document.querySelector('#loginUsers').innerHTML`), /plan-locked[^>]*>.*Caja 1/, 'el primero no tiene candado');
+run(`state.subscription.plan = 'pro'; loginTarget = state.users.find(u => u.name === 'Caja 2').id; loginPin = '4444'; attemptLogin();`);
+assert.strictEqual(get('me()?.name'), 'Caja 2', 'con Pro entra');
+ok('Plan Básico: 2 usuarios (administrador y un cajero o mesero; el tercero se bloquea al crear e iniciar sesión); Pro sin límite');
 
 // --- 6. Cambio de plan por sincronización ---
 run(`var loginMostrado = 0; const _showLogin = showLogin; showLogin = () => { loginMostrado++; session = null; };`);

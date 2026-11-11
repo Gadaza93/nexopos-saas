@@ -248,7 +248,7 @@ async function applyNegocioChange(id, kind) {
   const active = negocio.activo !== false, name = negocio.nombre || negocio.id;
   if (kind === 'toggle' && active && !confirm(`¿Suspender «${name}»? Su POS quedará bloqueado hasta reactivarlo.`)) return;
   const nextPlan = otherPlan(negocio.plan);
-  if (kind === 'plan' && !confirm(`¿Cambiar «${name}» al plan ${planLabel(nextPlan)}?${nextPlan === 'basico' ? ' Quedará con 10 mesas, un solo usuario y sin reportes avanzados.' : ''}`)) return;
+  if (kind === 'plan' && !confirm(`¿Cambiar «${name}» al plan ${planLabel(nextPlan)}?${nextPlan === 'basico' ? ' Quedará con 10 mesas, 2 usuarios y sin reportes avanzados.' : ''}`)) return;
   // Extender un negocio suspendido lo reactiva (la tarea nexopos-suspender-vencidos suspende a los vencidos)
   if (kind === 'extend' && !active && !confirm(`«${name}» está suspendido. ¿Extender ${EXTEND_DAYS} días y reactivarlo?`)) return;
   const options = kind === 'toggle' ? { activo: !active } : kind === 'plan' ? { plan: nextPlan } : { extenderDias: EXTEND_DAYS, activo: true };

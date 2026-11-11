@@ -8,6 +8,7 @@
    propio negocio: su restricción es de la app. */
 
 const PLAN_MAX_MESAS = 10; // mismo valor que el trigger de Supabase
+const PLAN_MAX_USUARIOS = 2; // Plan Básico: el administrador y un usuario más (cajero o mesero)
 // Línea de soporte y ventas de Netxpremium (wa.me, con indicativo y sin «+»). También la usa el modal del modo demo (app.js).
 globalThis.NETXPREMIUM_WHATSAPP = globalThis.NETXPREMIUM_WHATSAPP || '573052484278';
 const PLAN_FEATURES = {
@@ -16,12 +17,12 @@ const PLAN_FEATURES = {
   exports: { label: 'Exportación de reportes', detail: 'Descargar reportes en Excel e imprimirlos o guardarlos en PDF.' },
   netProfit: { label: 'Utilidad neta y rentabilidad', detail: 'Ganancia después de costos y gastos, con margen neto por período.' },
   expenses: { label: 'Seguimiento de gastos', detail: 'Registrar arriendo, servicios, nómina y caja menor.' },
-  multiRole: { label: 'Varios usuarios y roles', detail: 'Meseros y cajeros con su propio PIN y permisos diferenciados.' },
+  multiRole: { label: 'Usuarios ilimitados', detail: `El Plan Básico incluye ${PLAN_MAX_USUARIOS} usuarios: el administrador y un cajero o mesero.` },
   tables: { label: 'Mesas ilimitadas', detail: `El Plan Básico incluye hasta ${PLAN_MAX_MESAS} mesas o barras.` },
 };
 const PLANS = {
-  basico: { label: 'Básico', maxTables: PLAN_MAX_MESAS, features: [] },
-  pro: { label: 'Pro', maxTables: Infinity, features: Object.keys(PLAN_FEATURES) },
+  basico: { label: 'Básico', maxTables: PLAN_MAX_MESAS, maxUsers: PLAN_MAX_USUARIOS, features: [] },
+  pro: { label: 'Pro', maxTables: Infinity, maxUsers: Infinity, features: Object.keys(PLAN_FEATURES) },
 };
 
 function normalizePlanId(plan) {
@@ -39,8 +40,18 @@ function planAllows(feature) { return PLANS[currentPlan()].features.includes(fea
 function planTableLimit() { return PLANS[currentPlan()].maxTables; }
 // ¿Cabe una mesa más? Un negocio que bajó de plan con más mesas las conserva, pero no puede agregar otras.
 function canAddTable(count) { return Number(count) < planTableLimit(); }
-// Roles que el plan deja iniciar sesión y asignar: el Básico es de usuario único (administrador)
-function planAllowsRole(role) { return planAllows('multiRole') || role === 'admin'; }
+// Usuarios activos que admite el plan (Básico: PLAN_MAX_USUARIOS, con cualquier rol)
+function planUserLimit() { return PLANS[currentPlan()].maxUsers; }
+const PLAN_USERS_MESSAGE = `El Plan Básico incluye ${PLAN_MAX_USUARIOS} usuarios: el administrador y un cajero o mesero. Mejora a Pro para sumar más personal con su propio PIN.`;
+// ¿Este usuario puede iniciar sesión con el plan actual? Los administradores siempre; del resto, solo los primeros
+// que quepan en el límite (un negocio que bajó de plan conserva a todos, pero los demás quedan con candado).
+function planAllowsUser(user) {
+  if (!user || planAllows('multiRole') || user.role === 'admin') return true;
+  const active = (planState()?.users || []).filter(u => u.active !== false);
+  const admins = active.filter(u => u.role === 'admin').length;
+  const cupo = Math.max(0, planUserLimit() - Math.max(1, admins));
+  return active.filter(u => u.role !== 'admin').slice(0, cupo).some(u => u.id === user.id);
+}
 
 /* ---------- Modal «Mejora tu plan a PRO» ---------- */
 function planUpgradeUrl(feature) {
@@ -95,18 +106,18 @@ function handlePlanGateClick(event) {
   event.preventDefault(); event.stopImmediatePropagation();
   showUpgradeDialog(el.dataset.planFeature);
 }
-// Si el plan cambió con un usuario de otro rol en sesión (el negocio pasó a Básico), se vuelve al inicio de sesión
+// Si el plan cambió con un usuario que ya no cabe en sesión (el negocio pasó a Básico), se vuelve al inicio de sesión
 function enforcePlanSession() {
   applyPlanGates();
   const user = typeof me === 'function' ? me() : null;
-  if (user && !planAllowsRole(user.role) && typeof showLogin === 'function') {
+  if (user && !planAllowsUser(user) && typeof showLogin === 'function') {
     showLogin();
-    if (typeof showToast === 'function') showToast('Tu plan Básico incluye un solo usuario administrador. Inicia sesión con él.');
+    if (typeof showToast === 'function') showToast(`Tu plan Básico incluye ${PLAN_MAX_USUARIOS} usuarios. Inicia sesión con el administrador.`);
   }
   if (globalThis.tableViewMode && typeof renderTables === 'function') { try { renderTables(); } catch { /* sin interfaz */ } }
   if (typeof applyReportTab === 'function') { try { applyReportTab(); } catch { /* sin interfaz */ } }
 }
 if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('click', handlePlanGateClick, true);
 
-Object.assign(globalThis, { PLAN_MAX_MESAS, PLAN_FEATURES, PLANS, normalizePlanId, currentPlan, planAllows, planTableLimit, canAddTable, planAllowsRole, planUpgradeUrl, showUpgradeDialog, requirePlan, applyPlanGates, enforcePlanSession });
-if (typeof module !== 'undefined' && module.exports) module.exports = { PLAN_MAX_MESAS, PLANS, normalizePlanId, currentPlan, planAllows, planTableLimit, canAddTable, planAllowsRole, planUpgradeUrl };
+Object.assign(globalThis, { PLAN_MAX_MESAS, PLAN_FEATURES, PLANS, normalizePlanId, currentPlan, planAllows, planTableLimit, canAddTable, planUserLimit, planAllowsUser, PLAN_MAX_USUARIOS, PLAN_USERS_MESSAGE, planUpgradeUrl, showUpgradeDialog, requirePlan, applyPlanGates, enforcePlanSession });
+if (typeof module !== 'undefined' && module.exports) module.exports = { PLAN_MAX_MESAS, PLANS, normalizePlanId, currentPlan, planAllows, planTableLimit, canAddTable, planUserLimit, planAllowsUser, PLAN_MAX_USUARIOS, planUpgradeUrl };

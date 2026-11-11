@@ -149,8 +149,8 @@ function renderLogin() {
   document.querySelector('#loginTitle').textContent = 'NexoPos';
   const active = state.users.filter(u => u.active !== false), target = state.users.find(u => u.id === loginTarget);
   document.querySelector('#loginUsers').hidden = !!target; document.querySelector('#loginPinBox').hidden = !target;
-  const roleOk = u => typeof planAllowsRole !== 'function' || planAllowsRole(u.role);
-  document.querySelector('#loginUsers').innerHTML = active.map(u => `<button class="login-user${roleOk(u) ? '' : ' plan-locked'}" data-login-user="${u.id}"${roleOk(u) ? '' : ' title="Varios usuarios y roles: Plan Pro"'}><span class="mini-avatar">${escapeHtml(initials(u.name))}</span><strong>${escapeHtml(u.name)}</strong><small>${escapeHtml(ROLE_LABELS[u.role] || u.role)}</small>${roleOk(u) ? '' : '<span class="pro-tag">PRO</span>'}</button>`).join('');
+  const roleOk = u => typeof planAllowsUser !== 'function' || planAllowsUser(u);
+  document.querySelector('#loginUsers').innerHTML = active.map(u => `<button class="login-user${roleOk(u) ? '' : ' plan-locked'}" data-login-user="${u.id}"${roleOk(u) ? '' : ' title="Usuarios ilimitados: Plan Pro"'}><span class="mini-avatar">${escapeHtml(initials(u.name))}</span><strong>${escapeHtml(u.name)}</strong><small>${escapeHtml(ROLE_LABELS[u.role] || u.role)}</small>${roleOk(u) ? '' : '<span class="pro-tag">PRO</span>'}</button>`).join('');
   document.querySelector('#loginWho').textContent = target ? target.name : '';
   const forgotPin = document.querySelector('#forgotPinButton'); if (forgotPin) forgotPin.hidden = typeof isDemoMode === 'function' && isDemoMode();
   document.querySelectorAll('#pinDots i').forEach((dot, index) => dot.classList.toggle('filled', index < loginPin.length));
@@ -172,7 +172,7 @@ function pressPin(key) {
 }
 function attemptLogin() {
   const user = state.users.find(u => u.id === loginTarget);
-  if (user && typeof planAllowsRole === 'function' && !planAllowsRole(user.role)) { loginTarget = null; loginPin = ''; renderLogin(); return requirePlan('multiRole', 'El Plan Básico incluye un solo usuario administrador. Mejora a Pro para que meseros y cajeros entren con su propio PIN.'); }
+  if (user && typeof planAllowsUser === 'function' && !planAllowsUser(user)) { loginTarget = null; loginPin = ''; renderLogin(); return requirePlan('multiRole', PLAN_USERS_MESSAGE); }
   if (user && user.active !== false && hashPin(loginPin, user.salt) === user.pinHash) { loginFails = 0; return completeLogin(user); }
   loginFails++; loginPin = '';
   if (loginFails >= 5) { loginLockUntil = Date.now() + 30000; loginFails = 0; setLoginError('Demasiados intentos. Espera 30 segundos.'); } else setLoginError('PIN incorrecto.');
@@ -252,12 +252,11 @@ function renderTeam() {
 }
 function openUserDialog(id = null) {
   if (!can('team')) return deny();
-  if (!id && !planAllows('multiRole') && state.users.some(u => u.active !== false)) return requirePlan('multiRole');
+  if (!id && state.users.filter(u => u.active !== false).length >= planUserLimit()) return requirePlan('multiRole', PLAN_USERS_MESSAGE);
   editingUserId = id; const user = id && state.users.find(u => u.id === id);
   document.querySelector('#userDialogTitle').textContent = user ? 'Editar usuario' : 'Nuevo usuario';
   document.querySelector('#userName').value = user?.name || ''; document.querySelector('#userRole').value = user?.role || 'mesero';
-  document.querySelectorAll('#userRole option').forEach(o => { o.disabled = !planAllowsRole(o.value) && o.value !== user?.role; }); // Básico: solo administrador
-  if (!user && !planAllowsRole(document.querySelector('#userRole').value)) document.querySelector('#userRole').value = 'admin';
+  document.querySelectorAll('#userRole option').forEach(o => { o.disabled = false; });
   document.querySelector('#userPin').value = ''; document.querySelector('#userActive').checked = user ? user.active !== false : true;
   document.querySelector('#userPinLabel').textContent = user ? 'Nuevo PIN de 4 dígitos (vacío = no cambiar)' : 'PIN de 4 dígitos';
   document.querySelector('#userDialog').showModal();
@@ -269,11 +268,10 @@ function saveUser() {
   if (!name) return showToast('Escribe el nombre del usuario.');
   if ((!user && !/^\d{4}$/.test(pin)) || (user && pin && !/^\d{4}$/.test(pin))) return showToast('El PIN debe tener exactamente 4 números.');
   if (state.users.some(u => u.id !== editingUserId && u.name.toLowerCase() === name.toLowerCase())) return showToast('Ya existe un usuario con ese nombre.');
-  // Plan Básico: un solo usuario activo y solo administrador. Un negocio que bajó de plan conserva sus usuarios, pero no suma otros ni asigna roles.
+  // Plan Básico: hasta PLAN_MAX_USUARIOS usuarios activos, con cualquier rol. Un negocio que bajó de plan conserva sus usuarios, pero no suma otros.
   if (!planAllows('multiRole')) {
     const activeNow = state.users.filter(u => u.active !== false).length, activeAfter = state.users.filter(u => u.id !== editingUserId && u.active !== false).length + (active ? 1 : 0);
-    if (activeAfter > 1 && activeAfter > activeNow) return requirePlan('multiRole');
-    if (!planAllowsRole(role) && (!user || user.role !== role)) return requirePlan('multiRole');
+    if (activeAfter > planUserLimit() && activeAfter > activeNow) return requirePlan('multiRole', PLAN_USERS_MESSAGE);
   }
   const otherAdmins = state.users.filter(u => u.id !== editingUserId && u.role === 'admin' && u.active !== false).length;
   if (!otherAdmins && !(role === 'admin' && active)) return showToast('Debe existir al menos un administrador activo.');
@@ -1815,7 +1813,7 @@ globalThis.applyRemoteFloorPlan = applyRemoteFloorPlan;
 /* ============ Eventos y arranque ============ */
 function handleModuleClick(event) {
   const t = event.target.closest('button'); if (!t) return; const d = t.dataset;
-  if (d.loginUser && !planAllowsRole(state.users.find(u => u.id === d.loginUser)?.role)) return requirePlan('multiRole', 'El Plan Básico incluye un solo usuario administrador. Mejora a Pro para que meseros y cajeros entren con su propio PIN.');
+  if (d.loginUser && !planAllowsUser(state.users.find(u => u.id === d.loginUser))) return requirePlan('multiRole', PLAN_USERS_MESSAGE);
   if (d.loginUser) { loginTarget = d.loginUser; loginPin = ''; setLoginError(''); return renderLogin(); }
   if (d.key !== undefined) return pressPin(d.key);
   if (d.editUser) return openUserDialog(d.editUser);
