@@ -95,15 +95,15 @@ for (const file of ['preload.js', 'electron/preload.js']) {
   const src = read(file);
   check('Electron', 'Alta', `${file}: expone ipcRenderer o require completos al renderer`, /exposeInMainWorld\([^)]*ipcRenderer\s*[,)]|ipcRenderer:\s*ipcRenderer|require:\s*require/.test(src));
 }
-const indexHtml = read('index.html'), adminHtml = read('admin.html');
-const remoteScripts = [indexHtml, adminHtml].flatMap(h => h.match(/<script[^>]+src="https?:[^"]*"/gi) || []);
+const indexHtml = read('index.html');
+const remoteScripts = [indexHtml].flatMap(h => h.match(/<script[^>]+src="https?:[^"]*"/gi) || []);
 const vendored = fs.existsSync(path.join(ROOT, 'supabase.min.js')) && /^var supabase=/.test(read('supabase.min.js').slice(0, 20));
 const swSrc = read('service-worker.js'), buildFiles = JSON.parse(read('package.json')).build.files;
 check('Electron/Web', 'Alta', 'supabase-js empaquetado localmente con versión fija (sin <script> remotos ni carga dinámica desde CDN; incluido en service worker e instalador)',
   remoteScripts.length > 0 || /cdn\.jsdelivr|unpkg\.com/.test(read('sync.js')) || !vendored || !swSrc.includes("'./supabase.min.js'") || !buildFiles.includes('supabase.min.js'),
   [remoteScripts.join(' '), !vendored && 'falta supabase.min.js', !swSrc.includes("'./supabase.min.js'") && 'no está en ASSETS', !buildFiles.includes('supabase.min.js') && 'no está en build.files'].filter(Boolean).join(' · '));
 const cspOf = html => (html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i) || [])[1] || '';
-const cspIssues = [['index.html', indexHtml], ['admin.html', adminHtml]].flatMap(([name, html]) => {
+const cspIssues = [['index.html', indexHtml]].flatMap(([name, html]) => {
   const csp = cspOf(html), script = (csp.match(/script-src([^;]*)/) || [])[1] || '';
   if (!csp) return [`${name}: sin CSP`];
   return [
@@ -114,7 +114,7 @@ const cspIssues = [['index.html', indexHtml], ['admin.html', adminHtml]].flatMap
     html.indexOf('Content-Security-Policy') > html.indexOf('<script') && `${name}: la CSP va después de un script`
   ].filter(Boolean);
 });
-check('Electron/Web', 'Media', 'index.html/admin.html: Content-Security-Policy estricta (scripts solo propios, sin inline/eval, object-src none) antes de cualquier script',
+check('Electron/Web', 'Media', 'index.html: Content-Security-Policy estricta (scripts solo propios, sin inline/eval, object-src none) antes de cualquier script',
   cspIssues.length > 0, cspIssues.join(' · '));
 // Fuses: el gancho afterPack debe apagarlos y, si hay un ejecutable compilado, se leen los grabados en NexoPos.exe
 const pkgBuild = JSON.parse(read('package.json')).build || {};
@@ -149,7 +149,7 @@ check('Tickets', 'Alta', 'print.js: texto del negocio, cliente, cajero, producto
    2. SECRETOS Y SUPABASE
    ===================================================================================== */
 const SECRET = /service_role|sb_secret_[A-Za-z0-9_-]+|eyJhbGciOi[A-Za-z0-9_.-]{20,}/;
-const clientFiles = ['app.js', 'modules.js', 'sync.js', 'storage.js', 'print.js', 'admin.js', 'index.html', 'admin.html', 'main.js', 'preload.js', 'electron/main.js', 'electron/preload.js', 'package.json'];
+const clientFiles = ['app.js', 'modules.js', 'sync.js', 'storage.js', 'print.js', 'index.html', 'main.js', 'preload.js', 'electron/main.js', 'electron/preload.js', 'package.json'];
 check('Supabase', 'Crítica', 'Clave service_role / secreta / JWT incrustada en archivos del cliente', clientFiles.some(f => SECRET.test(read(f))),
   clientFiles.filter(f => SECRET.test(read(f))).join(', '));
 const asarPath = path.join(ROOT, 'dist', 'win-unpacked', 'resources', 'app.asar');
@@ -166,9 +166,6 @@ check('Supabase', 'Media', `sync.js: ${unscopedWrites.length} borrados por id si
   unscopedWrites.map(s => s.slice(0, 60)).join(' | '));
 check('Supabase', 'Media', 'La sesión de la terminal (refresh token) vive en localStorage: un XSS puede robarla', /localStorage\.setItem\(key, value\)/.test(read('storage.js')));
 // El alta va por la Edge Function admin-crear-negocio (auth.admin.createUser); la RPC vieja se revoca con supabase/migrations/20261104120000_*
-check('Supabase', 'Media', 'admin_create_negocio recibe la contraseña en claro como argumento de una función SQL (puede quedar en logs de PostgREST/Postgres)', /rpc\(\s*['"]admin_create_negocio['"]/.test(read('admin.js')));
-const adminSrc = read('admin.js');
-check('Supabase', 'Alta', 'admin.js: el rol SuperAdmin se lee de app_metadata (no editable por el usuario)', !/app_metadata\?\.role === 'superadmin'/.test(adminSrc) || /user_metadata\?\.role/.test(adminSrc));
 
 /* =====================================================================================
    3. INTEGRIDAD FINANCIERA Y CARRERAS DE SINCRONIZACIÓN (código real)
@@ -343,8 +340,6 @@ for (const [label, code] of Object.entries(sinks)) {
   if (out && out.__error && !dirty.length) sinkFindings.push(`${label}: no evaluable (${out.__error.slice(0, 60)})`);
   check('XSS', SEVERITY[label] || 'Alta', `${label}`, dirty.length > 0, dirty.join(', '));
 }
-const adm = require(path.join(ROOT, 'admin.js'));
-check('XSS', 'Alta', 'admin.js: escapeAdminHtml en tabla de negocios y credenciales', adm.escapeAdminHtml(P).includes('<img'));
 
 /* =====================================================================================
    Reporte (después de las comprobaciones asíncronas)

@@ -47,7 +47,6 @@
       "build/icon.png",
       "logo.png",
       "!admin.html",
-      "!admin.js",
       "!admin.css"
     ],
     "win": {

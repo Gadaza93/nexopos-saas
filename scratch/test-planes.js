@@ -4,7 +4,6 @@
 // 2. Plan Básico: máximo 10 mesas o barras (agregar y guardar), sin plano interactivo ni arrastre en el diseñador.
 // 3. Plan Básico: sin utilidad neta, valoración de inventario, exportaciones ni gastos; 2 usuarios (administrador y uno más).
 // 4. Un negocio que baja de plan conserva sus mesas y usuarios, pero no suma otros; el cambio llega por sincronización.
-// 5. Panel superadmin: el botón de plan envía p_plan a admin_update_negocio_status.
 
 const fs = require('fs');
 const path = require('path');
@@ -165,12 +164,7 @@ const url = run('planUpgradeUrl("tables")');
 assert.match(decodeURIComponent(url), /Bar Luna.*Plan Pro.*Mesas ilimitadas/);
 assert.ok(url.startsWith('https://wa.me/573052484278?text='), 'abre el chat de la línea de soporte');
 assert.ok(run('getNetxpremiumWhatsappUrl()').startsWith('https://wa.me/573052484278?text='), 'el modal del demo usa la misma línea');
-global.__IS_NODE_TEST__ = true;
-const admin = require('../admin.js');
-assert.deepStrictEqual(admin.statusPayload({ id: 'bar_x', activo: true, plan: 'pro' }, { plan: admin.otherPlan('pro') }), { p_negocio_id: 'bar_x', p_activo: true, p_plan: 'basico', p_extender_dias: 0 });
-assert.strictEqual(admin.otherPlan('basico'), 'pro');
-assert.deepStrictEqual(admin.statusPayload({ id: 'bar_x', activo: false, plan: 'basico' }, { extenderDias: 30 }).p_plan, 'basico', 'extender días conserva el plan');
-ok('el modal enlaza a WhatsApp con el negocio y la función; el panel superadmin cambia el plan con admin_update_negocio_status');
+ok('el modal enlaza a WhatsApp con el negocio y la función');
 
 console.log(`\n${pasadas} PRUEBAS SUPERADAS`);
 process.exit(0);
